@@ -125,6 +125,9 @@ public:
     //! camera model
     camera::base* camera_;
 
+    //! imu config
+    std::shared_ptr<imu::config> imu_config_;
+
     //! depth threshold (Ignore depths farther than true_depth_thr_ times the baseline.)
     double true_depth_thr_ = 40.0;
 
@@ -163,6 +166,15 @@ protected:
 
     //! Main stream of the tracking module
     void track();
+
+    //! Get last IMU index
+    unsigned int get_last_imu_index() const;
+
+    //! Cleanup old IMU data
+    void cleanup_old_imu_data();
+
+    //! Preintegrate IMU data
+    void preintegrate_imu();
 
     //! Try to initialize with the current frame
     bool initialize();
@@ -265,6 +277,7 @@ protected:
     //-----------------------------------------
     // for visual-inertial tracking
 
+    // IMU data deque
     std::deque<std::shared_ptr<imu::data>> imu_data_deque_;
 
     //-----------------------------------------
