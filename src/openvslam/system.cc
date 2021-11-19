@@ -5,6 +5,7 @@
 #include "openvslam/global_optimization_module.h"
 #include "openvslam/camera/base.h"
 #include "openvslam/data/camera_database.h"
+#include "openvslam/imu/imu_database.h"
 #include "openvslam/data/map_database.h"
 #include "openvslam/data/bow_database.h"
 #include "openvslam/data/bow_vocabulary.h"
@@ -73,6 +74,7 @@ system::system(const std::shared_ptr<config>& cfg, const std::string& vocab_file
 
     // database
     cam_db_ = new data::camera_database(camera_);
+    imu_db_ = new imu::imu_database(cfg_->imu_config_);
     map_db_ = new data::map_database();
     auto bow_database_yaml_node = util::yaml_optional_ref(cfg->yaml_node_, "BowDatabase");
     int reject_by_graph_distance = bow_database_yaml_node["reject_by_graph_distance"].as<bool>(false);
@@ -117,6 +119,8 @@ system::~system() {
     map_db_ = nullptr;
     delete cam_db_;
     cam_db_ = nullptr;
+    delete imu_db_;
+    imu_db_ = nullptr;
     delete bow_vocab_;
     bow_vocab_ = nullptr;
 
@@ -170,14 +174,14 @@ void system::save_keyframe_trajectory(const std::string& path, const std::string
 
 void system::load_map_database(const std::string& path) const {
     pause_other_threads();
-    io::map_database_io map_db_io(cam_db_, map_db_, bow_db_, bow_vocab_);
+    io::map_database_io map_db_io(cam_db_, imu_db_, map_db_, bow_db_, bow_vocab_);
     map_db_io.load_message_pack(path);
     resume_other_threads();
 }
 
 void system::save_map_database(const std::string& path) const {
     pause_other_threads();
-    io::map_database_io map_db_io(cam_db_, map_db_, bow_db_, bow_vocab_);
+    io::map_database_io map_db_io(cam_db_, imu_db_, map_db_, bow_db_, bow_vocab_);
     map_db_io.save_message_pack(path);
     resume_other_threads();
 }
