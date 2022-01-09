@@ -19,8 +19,7 @@ public:
                                                   bias_vertex* acc_bias_vtx, bias_vertex* gyr_bias_vtx,
                                                   optimize::internal::se3::shot_vertex* keyfrm_vtx1, velocity_vertex* velocity_vtx1,
                                                   optimize::internal::se3::shot_vertex* keyfrm_vtx2, velocity_vertex* velocity_vtx2,
-                                                  gravity_dir_vertex* gravity_dir_vtx, scale_vertex* scale_vtx,
-                                                  const std::shared_ptr<imu::config>& cfg);
+                                                  gravity_dir_vertex* gravity_dir_vtx, scale_vertex* scale_vtx);
 
     virtual ~inertial_gravity_scale_edge_on_camera_wrapper() = default;
 
@@ -43,8 +42,8 @@ inline inertial_gravity_scale_edge_on_camera_wrapper::inertial_gravity_scale_edg
     optimize::internal::se3::shot_vertex* keyfrm_vtx2,
     velocity_vertex* velocity_vtx2,
     gravity_dir_vertex* gravity_dir_vtx,
-    scale_vertex* scale_vtx,
-    const std::shared_ptr<imu::config>& cfg) {
+    scale_vertex* scale_vtx)
+{
     g2o::BaseMultiEdge<9, std::shared_ptr<preintegrated>>* edge;
     edge = new inertial_gravity_scale_edge_on_camera(cfg->get_rel_rot_ic(), cfg->get_rel_trans_ic());
 

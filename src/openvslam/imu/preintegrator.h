@@ -45,7 +45,7 @@ public:
      * @param b
      * @param conf
      */
-    preintegrator(const bias& b, const std::shared_ptr<config>& conf);
+    preintegrator(const bias& b);
 
     /**
      * Constructor for IMU preintegrator

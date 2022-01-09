@@ -75,7 +75,7 @@ void global_bundle_adjuster::optimize(const unsigned int lead_keyfrm_id_in_globa
         auto keyfrm_vtx = keyfrm_vtx_container.create_vertex(keyfrm, keyfrm->id_ == 0);
         optimizer.addVertex(keyfrm_vtx);
 
-        if (keyfrm->imu_config_) {
+        if (imu::config::valid()) {
             auto velocity_vtx = velocity_vtx_container.create_vertex(keyfrm, false);
             optimizer.addVertex(velocity_vtx);
         }
@@ -142,7 +142,7 @@ void global_bundle_adjuster::optimize(const unsigned int lead_keyfrm_id_in_globa
             imu::internal::inertial_edge_wrapper inertial_edge_wrap(keyfrm->imu_preintegrator_from_inertial_ref_keyfrm_->preintegrated_,
                                                                     acc_bias_vtx1, gyr_bias_vtx1,
                                                                     keyfrm_vtx1, velocity_vtx1, keyfrm_vtx2, velocity_vtx2,
-                                                                    sqrt_chi_sq, use_huber_kernel_inertial, keyfrm->imu_config_);
+                                                                    sqrt_chi_sq, use_huber_kernel_inertial);
             if (!use_shared_bias_) {
                 // TODO
             }

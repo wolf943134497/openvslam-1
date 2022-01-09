@@ -20,7 +20,7 @@ class inertial_edge_on_camera final : public g2o::BaseMultiEdge<9, std::shared_p
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-    inertial_edge_on_camera(const std::shared_ptr<imu::config>& cfg);
+    inertial_edge_on_camera();
 
     bool read(std::istream& is) override;
 
@@ -31,14 +31,12 @@ public:
     void linearizeOplus() override;
 
     Vec3_t gravity;
-    std::shared_ptr<imu::config> cfg_;
 };
 
-inline inertial_edge_on_camera::inertial_edge_on_camera(const std::shared_ptr<imu::config>& cfg)
+inline inertial_edge_on_camera::inertial_edge_on_camera()
     : g2o::BaseMultiEdge<9, std::shared_ptr<preintegrated>>() {
     resize(6);
     gravity << 0, 0, -imu::constant::gravity();
-    cfg_ = cfg;
 }
 
 inline bool inertial_edge_on_camera::read(std::istream& is) {
@@ -66,15 +64,15 @@ inline void inertial_edge_on_camera::computeError() {
     const double dt = _measurement->dt_;
 
     const Mat33_t Rcw1 = keyfrm_vtx1->estimate().rotation().toRotationMatrix();
-    const Mat33_t Riw1 = cfg_->get_rel_rot_ic() * Rcw1;
+    const Mat33_t Riw1 = imu::config::get_rel_rot_ic() * Rcw1;
     const Mat33_t Rwi1 = Riw1.transpose();
     const Vec3_t tcw1 = keyfrm_vtx1->estimate().translation();
-    const Vec3_t twi1 = -Rwi1 * (cfg_->get_rel_rot_ic() * tcw1 + cfg_->get_rel_trans_ic());
+    const Vec3_t twi1 = -Rwi1 * (imu::config::get_rel_rot_ic() * tcw1 + imu::config::get_rel_trans_ic());
     const Mat33_t Rcw2 = keyfrm_vtx2->estimate().rotation().toRotationMatrix();
-    const Mat33_t Riw2 = cfg_->get_rel_rot_ic() * Rcw2;
+    const Mat33_t Riw2 = imu::config::get_rel_rot_ic() * Rcw2;
     const Mat33_t Rwi2 = Riw2.transpose();
     const Vec3_t tcw2 = keyfrm_vtx2->estimate().translation();
-    const Vec3_t twi2 = -Rwi2 * (cfg_->get_rel_rot_ic() * tcw2 + cfg_->get_rel_trans_ic());
+    const Vec3_t twi2 = -Rwi2 * (imu::config::get_rel_rot_ic() * tcw2 + imu::config::get_rel_trans_ic());
 
     const Vec3_t v1 = velocity_vtx1->estimate();
     const Vec3_t v2 = velocity_vtx2->estimate();
@@ -105,15 +103,15 @@ inline void inertial_edge_on_camera::linearizeOplus() {
     const Mat33_t jacob_position_acc = _measurement->jacob_position_acc_;
 
     const Mat33_t Rcw1 = keyfrm_vtx1->estimate().rotation().toRotationMatrix();
-    const Mat33_t Riw1 = cfg_->get_rel_rot_ic() * Rcw1;
+    const Mat33_t Riw1 = imu::config::get_rel_rot_ic() * Rcw1;
     const Mat33_t Rwi1 = Riw1.transpose();
     const Vec3_t tcw1 = keyfrm_vtx1->estimate().translation();
-    const Vec3_t twi1 = -Rwi1 * (cfg_->get_rel_rot_ic() * tcw1 + cfg_->get_rel_trans_ic());
+    const Vec3_t twi1 = -Rwi1 * (imu::config::get_rel_rot_ic() * tcw1 + imu::config::get_rel_trans_ic());
     const Mat33_t Rcw2 = keyfrm_vtx2->estimate().rotation().toRotationMatrix();
-    const Mat33_t Riw2 = cfg_->get_rel_rot_ic() * Rcw2;
+    const Mat33_t Riw2 = imu::config::get_rel_rot_ic() * Rcw2;
     const Mat33_t Rwi2 = Riw2.transpose();
     const Vec3_t tcw2 = keyfrm_vtx2->estimate().translation();
-    const Vec3_t twi2 = -Rwi2 * (cfg_->get_rel_rot_ic() * tcw2 + cfg_->get_rel_trans_ic());
+    const Vec3_t twi2 = -Rwi2 * (imu::config::get_rel_rot_ic() * tcw2 + imu::config::get_rel_trans_ic());
 
     const Vec3_t v1 = velocity_vtx1->estimate();
     const Vec3_t v2 = velocity_vtx2->estimate();
@@ -123,8 +121,8 @@ inline void inertial_edge_on_camera::linearizeOplus() {
     const Mat33_t inv_right_jacobian = util::converter::inverse_right_jacobian_so3(util::converter::log_so3(error_rotation));
     const double dt = _measurement->dt_;
 
-    const Mat33_t rel_rot_ci = cfg_->get_rel_rot_ic().transpose();
-    const Mat33_t rel_rot_ic = cfg_->get_rel_rot_ic();
+    const Mat33_t rel_rot_ci = imu::config::get_rel_rot_ic().transpose();
+    const Mat33_t rel_rot_ic = imu::config::get_rel_rot_ic();
     // Jacobians wrt Pose 1
     _jacobianOplus[0].setZero();
     // rotation

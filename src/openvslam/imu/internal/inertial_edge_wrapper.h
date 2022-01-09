@@ -20,8 +20,7 @@ public:
                           bias_vertex* acc_bias_vtx, bias_vertex* gyr_bias_vtx,
                           optimize::internal::se3::shot_vertex* keyfrm_vtx1, velocity_vertex* velocity_vtx1,
                           optimize::internal::se3::shot_vertex* keyfrm_vtx2, velocity_vertex* velocity_vtx2,
-                          const float sqrt_chi_sq, const bool use_huber_loss = true,
-                          const std::shared_ptr<imu::config>& cfg = nullptr);
+                          const float sqrt_chi_sq, const bool use_huber_loss = true);
 
     virtual ~inertial_edge_wrapper() = default;
 
@@ -40,12 +39,11 @@ inline inertial_edge_wrapper::inertial_edge_wrapper(const std::shared_ptr<preint
                                                     bias_vertex* acc_bias_vtx, bias_vertex* gyr_bias_vtx,
                                                     optimize::internal::se3::shot_vertex* keyfrm_vtx1, velocity_vertex* velocity_vtx1,
                                                     optimize::internal::se3::shot_vertex* keyfrm_vtx2, velocity_vertex* velocity_vtx2,
-                                                    const float sqrt_chi_sq, const bool use_huber_loss,
-                                                    const std::shared_ptr<imu::config>& cfg) {
+                                                    const float sqrt_chi_sq, const bool use_huber_loss) {
     // 拘束条件を設定
     g2o::BaseMultiEdge<9, std::shared_ptr<preintegrated>>* edge;
-    if (cfg) {
-        edge = new inertial_edge_on_camera(cfg);
+    if (imu::config::valid()) {
+        edge = new inertial_edge_on_camera();
     }
     else {
         edge = new inertial_edge_on_imu();

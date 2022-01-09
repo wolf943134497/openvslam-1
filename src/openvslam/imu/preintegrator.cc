@@ -14,9 +14,9 @@ measurement::measurement(const double acc_x, const double acc_y, const double ac
 measurement::measurement(const Vec3_t& acc, const Vec3_t& gyr, const double dt)
     : acc_(acc), gyr_(gyr), dt_(dt) {}
 
-preintegrator::preintegrator(const bias& b, const std::shared_ptr<config>& cfg) {
-    initial_covariance_ << cfg->get_gyr_covariance(), Mat33_t::Zero(), Mat33_t::Zero(), cfg->get_acc_covariance();
-    bias_covariance_ << cfg->get_gyr_bias_covariance(), Mat33_t::Zero(), Mat33_t::Zero(), cfg->get_acc_bias_covariance();
+preintegrator::preintegrator(const bias& b) {
+    initial_covariance_ << imu::config::get_gyr_covariance(), Mat33_t::Zero(), Mat33_t::Zero(), imu::config::get_acc_covariance();
+    bias_covariance_ << imu::config::get_gyr_bias_covariance(), Mat33_t::Zero(), Mat33_t::Zero(), imu::config::get_acc_bias_covariance();
     preintegrated_ = eigen_alloc_shared<preintegrated>(b);
     preintegrated_->initialize();
 }

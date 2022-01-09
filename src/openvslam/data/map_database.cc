@@ -323,7 +323,7 @@ void map_database::register_keyframe(camera_database* cam_db, imu::imu_database*
 
     // imu information
     if (json_keyfrm.contains("imu_preintegrator_from_inertial_ref_keyfrm")) {
-        keyfrm->imu_preintegrator_from_inertial_ref_keyfrm_ = eigen_alloc_shared<imu::preintegrator>(json_keyfrm.at("imu_preintegrator_from_inertial_ref_keyfrm"));
+        keyfrm->imu_preintegrator_from_inertial_ref_keyfrm_ = new imu::preintegrator(json_keyfrm.at("imu_preintegrator_from_inertial_ref_keyfrm"));
     }
     if (json_keyfrm.contains("velocity")) {
         keyfrm->velocity_ = data::convert_json_to_matrix<Vec3_t>(json_keyfrm.at("velocity"));
@@ -331,9 +331,9 @@ void map_database::register_keyframe(camera_database* cam_db, imu::imu_database*
     if (json_keyfrm.contains("imu_bias")) {
         keyfrm->imu_bias_ = imu::bias(json_keyfrm.at("imu_bias"));
     }
-    if (json_keyfrm.contains("imu_config")) {
-        keyfrm->imu_config_ = imu_db->get_imu(json_keyfrm.at("imu_config"));
-    }
+//    if (json_keyfrm.contains("imu_config")) {
+//        keyfrm->imu_config_ = imu_db->get_imu(json_keyfrm.at("imu_config"));
+//    }
 
     // Append to map database
     assert(!keyframes_.count(id));

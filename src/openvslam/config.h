@@ -31,8 +31,7 @@ public:
     //! Camera model
     camera::base* camera_ = nullptr;
 
-    //! IMU config
-    std::shared_ptr<imu::config> imu_config_ = nullptr;
+    bool useIMU{false};
 };
 
 } // namespace openvslam

@@ -24,6 +24,7 @@ class global_optimization_module;
 namespace data {
 class map_database;
 class bow_database;
+class keyframe;
 } // namespace data
 
 namespace feature {
@@ -125,8 +126,14 @@ public:
     //! camera model
     camera::base* camera_;
 
-    //! imu config
-    std::shared_ptr<imu::config> imu_config_;
+    //! inertial reference keyframe
+    data::keyframe* inertial_ref_keyfrm_ = nullptr;
+
+    //! IMU preintegrator from inertial reference keyframe
+    imu::preintegrator* imu_preintegrator_from_inertial_ref_keyfrm_ = nullptr;
+
+    //! IMU bias
+    imu::bias imu_bias_;
 
     //! depth threshold (Ignore depths farther than true_depth_thr_ times the baseline.)
     double true_depth_thr_ = 40.0;

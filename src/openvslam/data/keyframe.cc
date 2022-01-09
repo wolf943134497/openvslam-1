@@ -11,6 +11,7 @@
 #include "openvslam/feature/orb_params.h"
 #include "openvslam/util/converter.h"
 #include "openvslam/imu/preintegrator.h"
+#include "openvslam/imu/preintegrated.h"
 #include "openvslam/imu/config.h"
 
 #include <nlohmann/json.hpp>
@@ -37,13 +38,10 @@ keyframe::keyframe(const frame& frm, map_database* map_db, bow_database* bow_db)
       num_scale_levels_(frm.num_scale_levels_), scale_factor_(frm.scale_factor_),
       log_scale_factor_(frm.log_scale_factor_), scale_factors_(frm.scale_factors_),
       level_sigma_sq_(frm.level_sigma_sq_), inv_level_sigma_sq_(frm.inv_level_sigma_sq_),
+
       // imu
-      inertial_ref_keyfrm_(frm.inertial_ref_keyfrm_),
-      imu_preintegrator_from_inertial_ref_keyfrm_(frm.imu_preintegrator_from_inertial_ref_keyfrm_),
-      velocity_(frm.velocity_),
-      velocity_is_valid_(frm.velocity_is_valid_),
-      imu_bias_(frm.imu_bias_),
-      imu_config_(frm.imu_config_),
+      velocity_is_valid_(false),
+
       // observations
       landmarks_(frm.landmarks_),
       // databases
@@ -89,6 +87,11 @@ keyframe::keyframe(const unsigned int id, const unsigned int src_frm_id, const d
     //   should set spanning_parent_ using graph_node->set_spanning_parent()
     //   should set spanning_children_ using graph_node->add_spanning_child()
     //   should set loop_edges_ using graph_node->add_loop_edge()
+}
+
+keyframe::~keyframe() {
+    if(imu_preintegrator_from_inertial_ref_keyfrm_)
+        delete imu_preintegrator_from_inertial_ref_keyfrm_;
 }
 
 nlohmann::json keyframe::to_json() const {
@@ -153,8 +156,8 @@ nlohmann::json keyframe::to_json() const {
     }
     j["velocity"] = convert_matrix_to_json(velocity_);
     j["imu_bias"] = imu_bias_.to_json();
-    if (imu_config_) {
-        j["imu_config"] = imu_config_->get_name();
+    if (imu::config::valid()) {
+        j["imu_config"] = imu::config::get_name();
     }
     return j;
 }
@@ -188,11 +191,11 @@ Mat44_t keyframe::get_cam_pose_inv() const {
 }
 
 Mat44_t keyframe::get_imu_pose() const {
-    return imu_config_->get_rel_pose_ic() * get_cam_pose();
+    return imu::config::get_rel_pose_ic() * get_cam_pose();
 }
 
 Mat44_t keyframe::get_imu_pose_inv() const {
-    return get_cam_pose_inv() * imu_config_->get_rel_pose_ci();
+    return get_cam_pose_inv() * imu::config::get_rel_pose_ci();
 }
 
 Vec3_t keyframe::get_cam_center() const {
@@ -474,6 +477,17 @@ void keyframe::prepare_for_erasing() {
 
 bool keyframe::will_be_erased() {
     return will_be_erased_;
+}
+
+void keyframe::set_imu_preintegrator(imu::preintegrator*& preint_, keyframe* ref){
+    assert(fabs(timestamp_-preint_->preintegrated_->dt_-ref->timestamp_)<1e-3);
+    std::swap(preint_,imu_preintegrator_from_inertial_ref_keyfrm_);
+    inertial_ref_keyfrm_ = ref;
+    assert(!ref->inertial_referrer_keyfrm_);
+    ref->inertial_referrer_keyfrm_ = this;
+
+    imu_bias_ = ref->imu_bias_;
+    //todo: set velocity from preintegrated imu measurement
 }
 
 } // namespace data

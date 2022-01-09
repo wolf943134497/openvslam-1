@@ -69,6 +69,7 @@ public:
              const unsigned int num_scale_levels, const float scale_factor,
              bow_vocabulary* bow_vocab, bow_database* bow_db, map_database* map_db);
 
+    ~keyframe();
     /**
      * Encode this keyframe information as JSON
      */
@@ -215,6 +216,13 @@ public:
     bool will_be_erased();
 
     //-----------------------------------------
+    // imu
+    /**
+     * set preintegrated imu measurements and the reference frame
+     */
+    void set_imu_preintegrator(imu::preintegrator*& preint_,keyframe* ref);
+
+    //-----------------------------------------
     // for local map update
 
     //! identifier for local map update
@@ -316,7 +324,7 @@ public:
     keyframe* inertial_referrer_keyfrm_ = nullptr;
 
     //! IMU preintegrator from inertial reference keyframe
-    std::shared_ptr<imu::preintegrator> imu_preintegrator_from_inertial_ref_keyfrm_ = nullptr;
+    imu::preintegrator* imu_preintegrator_from_inertial_ref_keyfrm_ = nullptr;
 
     //! Velocity
     Vec3_t velocity_ = Vec3_t::Zero();
@@ -327,10 +335,9 @@ public:
     //! IMU bias
     imu::bias imu_bias_;
 
-    //! IMU configuration
-    std::shared_ptr<imu::config> imu_config_ = nullptr;
-
 private:
+
+
     //-----------------------------------------
     // camera pose
 

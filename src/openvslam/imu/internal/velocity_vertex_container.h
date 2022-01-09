@@ -20,8 +20,6 @@ public:
     //! Destructor
     virtual ~velocity_vertex_container() = default;
 
-    //! Create and return the g2o vertex created from the specified frame
-    velocity_vertex* create_vertex(data::frame* frm, const bool is_constant = false);
 
     //! Create and return the g2o vertex created from the specified keyframe
     velocity_vertex* create_vertex(data::keyframe* keyfrm, const bool is_constant = false);
@@ -85,9 +83,6 @@ inline velocity_vertex_container::velocity_vertex_container(const std::shared_pt
     id_container_.reserve(num_reserve);
 }
 
-inline velocity_vertex* velocity_vertex_container::create_vertex(data::frame* frm, const bool is_constant) {
-    return create_vertex(frm->id_, frm->velocity_, is_constant);
-}
 
 inline velocity_vertex* velocity_vertex_container::create_vertex(data::keyframe* keyfrm, const bool is_constant) {
     return create_vertex(keyfrm->id_, keyfrm->velocity_, is_constant);

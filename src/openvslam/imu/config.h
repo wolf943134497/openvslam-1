@@ -12,59 +12,72 @@ class config {
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-    //! Constructor
-    config(const std::string& name, const double rate_hz, const Mat44_t& rel_pose_ic,
-           const double ns_acc, const double ns_gyr, const double rw_acc_bias, const double rw_gyr_bias);
-    explicit config(const YAML::Node& yaml_node);
+    config(config& another) = delete;
+    config& operator==(config& another)=delete;
 
-    //! Create IMU config from json
-    explicit config(const nlohmann::json& json_cameras);
+    void static fromYaml(const YAML::Node& yaml_node);
 
+    void static fromJson(const nlohmann::json& json_imu);
+
+
+    void static fromPara(std::string name,unsigned int rate_hz,const std::vector<double>& rel_pose_ic,
+                         double ns_acc, double ns_gyr,double rw_acc_bias, double rw_gyr_bias);
     //! Create json from IMU config
-    nlohmann::json to_json() const;
+    static nlohmann::json to_json();
 
+
+    inline static bool valid(){
+        return instance_.valid_;
+    }
     //---------------------------
     // Setters and Getters
 
     //! Get IMU model name
-    std::string get_name() const;
+    static std::string get_name() ;
     //! Get IMU rate [Hz]
-    double get_rate_hz() const;
+    static double get_rate_hz() ;
     //! Get IMU rate [s]
-    double get_rate_dt() const;
+    static double get_rate_dt() ;
 
     //! Get IMU's relative pose w.r.t. the camera
-    Mat44_t get_rel_pose_ic() const;
+    static Mat44_t get_rel_pose_ic() ;
     //! Get IMU's relative rotation w.r.t. the camera
-    Mat33_t get_rel_rot_ic() const;
+    static Mat33_t get_rel_rot_ic() ;
     //! Get IMU's relative translation w.r.t. the camera
-    Vec3_t get_rel_trans_ic() const;
+    static Vec3_t get_rel_trans_ic() ;
     //! Get camera's relative pose w.r.t. the IMU
-    Mat44_t get_rel_pose_ci() const;
+    static Mat44_t get_rel_pose_ci() ;
     //! Get camera's relative rotation w.r.t. the IMU
-    Mat33_t get_rel_rot_ci() const;
+    static Mat33_t get_rel_rot_ci() ;
     //! Get camera's relative translation w.r.t. the IMU
-    Vec3_t get_rel_trans_ci() const;
+    static Vec3_t get_rel_trans_ci() ;
 
     //! Set acceleration noise density [m/s^2/sqrt(Hz)]
-    void set_acc_noise_density(const double ns_acc);
+    static void set_acc_noise_density(const double ns_acc);
     //! Set gyroscope noise density [rad/s/sqrt(Hz)]
-    void set_gyr_noise_density(const double ns_gyr);
+    static void set_gyr_noise_density(const double ns_gyr);
     //! Set random walk of acceleration sensor bias [m/s^3/sqrt(Hz)]
-    void set_acc_bias_random_walk(const double rw_acc_bias);
+    static void set_acc_bias_random_walk(const double rw_acc_bias);
     //! Set random walk of gyroscope sensor bias [rad/s^2/sqrt(Hz)]
-    void set_gyr_bias_random_walk(const double rw_gyr_bias);
+    static void set_gyr_bias_random_walk(const double rw_gyr_bias);
 
     //! Get acceleration covariance [(m/s^2)^2]
-    Mat33_t get_acc_covariance() const;
+    static Mat33_t get_acc_covariance() ;
     //! Get gyroscope covariance [(rad/s)^2]
-    Mat33_t get_gyr_covariance() const;
+    static Mat33_t get_gyr_covariance() ;
     //! Get acceleration bias covariance [(m/s^3)^2]
-    Mat33_t get_acc_bias_covariance() const;
+    static Mat33_t get_acc_bias_covariance() ;
     //! Get gyroscope bias covariance [(rad/s^2)^2]
-    Mat33_t get_gyr_bias_covariance() const;
+    static Mat33_t get_gyr_bias_covariance() ;
 
 private:
+    config(){}
+    ~config(){}
+
+    static config instance_;
+
+    bool valid_{false};
+
     //! Update rel_pose_ci_ using rel_pose_ic_
     void update_pose();
     //! Update covariances using the currently assigned variables

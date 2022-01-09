@@ -74,7 +74,7 @@ system::system(const std::shared_ptr<config>& cfg, const std::string& vocab_file
 
     // database
     cam_db_ = new data::camera_database(camera_);
-    imu_db_ = new imu::imu_database(cfg_->imu_config_);
+    imu_db_ = new imu::imu_database();
     map_db_ = new data::map_database();
     auto bow_database_yaml_node = util::yaml_optional_ref(cfg->yaml_node_, "BowDatabase");
     int reject_by_graph_distance = bow_database_yaml_node["reject_by_graph_distance"].as<bool>(false);

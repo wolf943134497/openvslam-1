@@ -182,7 +182,7 @@ void mapping_module::mapping_with_new_keyframe() {
         local_bundle_adjuster_->optimize(cur_keyfrm_, &abort_local_BA_);
     }
 
-    if (cur_keyfrm_->imu_config_ && !imu_is_initialized_ && !reset_is_requested_) {
+    if (imu::config::valid() && !imu_is_initialized_ && !reset_is_requested_) {
         initialize_imu();
     }
 

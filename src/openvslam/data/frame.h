@@ -24,10 +24,6 @@
 
 namespace openvslam {
 
-namespace imu {
-class preintegrator;
-class config;
-} // namespace imu
 
 namespace camera {
 class base;
@@ -63,7 +59,7 @@ public:
      */
     frame(const cv::Mat& img_gray, const double timestamp,
           feature::orb_extractor* extractor, bow_vocabulary* bow_vocab,
-          camera::base* camera, const float depth_thr, const std::shared_ptr<imu::config>& imu_config = nullptr,
+          camera::base* camera, const float depth_thr,
           const cv::Mat& mask = cv::Mat{});
 
     /**
@@ -80,7 +76,7 @@ public:
      */
     frame(const cv::Mat& left_img_gray, const cv::Mat& right_img_gray, const double timestamp,
           feature::orb_extractor* extractor_left, feature::orb_extractor* extractor_right, bow_vocabulary* bow_vocab,
-          camera::base* camera, const float depth_thr, const std::shared_ptr<imu::config>& imu_config = nullptr,
+          camera::base* camera, const float depth_thr,
           const cv::Mat& mask = cv::Mat{});
 
     /**
@@ -96,7 +92,7 @@ public:
      */
     frame(const cv::Mat& img_gray, const cv::Mat& img_depth, const double timestamp,
           feature::orb_extractor* extractor, bow_vocabulary* bow_vocab,
-          camera::base* camera, const float depth_thr, const std::shared_ptr<imu::config>& imu_config = nullptr,
+          camera::base* camera, const float depth_thr,
           const cv::Mat& mask = cv::Mat{});
 
     /**
@@ -245,28 +241,6 @@ public:
 
     //! reference keyframe for tracking
     keyframe* ref_keyfrm_ = nullptr;
-
-    // imu information
-    //! inertial reference keyframe
-    keyframe* inertial_ref_keyfrm_ = nullptr;
-
-    //! IMU preintegrator from inertial reference keyframe
-    std::shared_ptr<imu::preintegrator> imu_preintegrator_from_inertial_ref_keyfrm_ = nullptr;
-
-    //! IMU preintegrator from last keyframe
-    std::shared_ptr<imu::preintegrator> imu_preintegrator_ = nullptr;
-
-    //! Velocity
-    Vec3_t velocity_ = Vec3_t::Zero();
-
-    //! Velocity is valid or not
-    bool velocity_is_valid_ = false;
-
-    //! IMU bias
-    imu::bias imu_bias_;
-
-    //! IMU configuration
-    std::shared_ptr<imu::config> imu_config_ = nullptr;
 
     // ORB scale pyramid information
     //! number of scale levels

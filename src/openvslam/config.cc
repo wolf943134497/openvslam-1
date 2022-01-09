@@ -67,7 +67,8 @@ config::config(const YAML::Node& yaml_node, const std::string& config_file_path)
     // Load IMU Parameters //
     //=====================//
     if (util::yaml_optional_ref(yaml_node_, "IMU")["enabled"].as<bool>(false)) {
-        imu_config_ = eigen_alloc_shared<imu::config>(util::yaml_optional_ref(yaml_node_, "IMU"));
+        imu::config::fromYaml(util::yaml_optional_ref(yaml_node_, "IMU"));
+        useIMU = true;
     }
 }
 

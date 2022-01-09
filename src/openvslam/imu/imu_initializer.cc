@@ -53,7 +53,7 @@ bool imu_initializer::initialize(const std::vector<data::keyframe*>& keyfrms, Ma
             continue;
         }
 
-        auto imu_pose_vtx = imu_pose_vtx_container.create_vertex(keyfrm->id_, keyfrm->get_imu_pose(), true);
+        auto imu_pose_vtx = imu_pose_vtx_container.create_vertex(keyfrm->id_, keyfrm->get_cam_pose(), true);
         optimizer.addVertex(imu_pose_vtx);
 
         auto velocity_vtx = velocity_vtx_container.create_vertex(keyfrm, false);
@@ -105,6 +105,8 @@ bool imu_initializer::initialize(const std::vector<data::keyframe*>& keyfrms, Ma
         assert(keyfrm->imu_preintegrator_from_inertial_ref_keyfrm_);
         auto ref_keyfrm = keyfrm->inertial_ref_keyfrm_;
 
+        assert(fabs(ref_keyfrm->timestamp_+ keyfrm->imu_preintegrator_from_inertial_ref_keyfrm_->preintegrated_->dt_-keyfrm->timestamp_)<0.01);
+
         auto imu_pose_vtx1 = imu_pose_vtx_container.get_vertex(ref_keyfrm);
         auto velocity_vtx1 = velocity_vtx_container.get_vertex(ref_keyfrm);
         auto imu_pose_vtx2 = imu_pose_vtx_container.get_vertex(keyfrm);
@@ -119,7 +121,7 @@ bool imu_initializer::initialize(const std::vector<data::keyframe*>& keyfrms, Ma
     }
 
     // 4. Perform optimization
-
+    optimizer.setVerbose(true);
     optimizer.initializeOptimization();
     optimizer.optimize(num_iter_);
 
