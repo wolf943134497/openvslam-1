@@ -351,7 +351,7 @@ void tracking_module::track() {
     if (tracking_state_ == tracker_state_t::NotInitialized) {
         tracking_state_ = tracker_state_t::Initializing;
     }
-    else if (imu::config::valid()) {
+    else if (imu::config::available()) {
         preintegrate_imu();
     }
 
@@ -373,7 +373,7 @@ void tracking_module::track() {
 
             // pass all of the keyframes to the mapping module
             auto keyfrms = map_db_->get_all_keyframes();
-            if(camera_->setup_type_ == camera::setup_type_t::Monocular && imu::config::valid())
+            if(camera_->setup_type_ == camera::setup_type_t::Monocular && imu::config::available())
             {
                 assert(keyfrms.size()==2);
                 if(keyfrms[0]->id_>keyfrms[1]->id_)
@@ -462,7 +462,7 @@ void tracking_module::track() {
 
 bool tracking_module::initialize() {
     //if is first frame
-    if (camera_->setup_type_ == camera::setup_type_t::Monocular && imu::config::valid() && initializer_.get_state() == module::initializer_state_t::NotReady) {
+    if (camera_->setup_type_ == camera::setup_type_t::Monocular && imu::config::available() && initializer_.get_state() == module::initializer_state_t::NotReady) {
         imu_preintegrator_from_inertial_ref_keyfrm_ =new imu::preintegrator(imu::bias());
     }
 
@@ -763,7 +763,7 @@ void tracking_module::insert_new_keyframe() {
     // set the reference keyframe with the new keyframe
     curr_frm_.ref_keyfrm_ = new_keyfrm;
 
-    if (imu::config::valid()) {
+    if (imu::config::available()) {
         new_keyfrm->set_imu_preintegrator(imu_preintegrator_from_inertial_ref_keyfrm_,inertial_ref_keyfrm_);
 
         inertial_ref_keyfrm_ = new_keyfrm;

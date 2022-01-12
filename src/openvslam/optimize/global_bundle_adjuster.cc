@@ -8,6 +8,7 @@
 #include "openvslam/util/converter.h"
 #include "openvslam/imu/internal/velocity_vertex_container.h"
 #include "openvslam/imu/internal/bias_vertex_container.h"
+#include "openvslam/imu/internal/bias_edge_wrapper.h"
 #include "openvslam/imu/internal/inertial_edge_wrapper.h"
 #include "openvslam/imu/internal/prior_bias_edge_wrapper.h"
 #include "openvslam/imu/preintegrator.h"
@@ -60,8 +61,8 @@ void global_bundle_adjuster::optimize(const unsigned int lead_keyfrm_id_in_globa
     auto vtx_id_offset = std::make_shared<unsigned int>(0);
     internal::se3::shot_vertex_container keyfrm_vtx_container(vtx_id_offset, keyfrms.size());
     imu::internal::velocity_vertex_container velocity_vtx_container(vtx_id_offset, keyfrms.size());
-    imu::internal::bias_vertex_container acc_bias_vtx_container(vtx_id_offset, 1);
-    imu::internal::bias_vertex_container gyr_bias_vtx_container(vtx_id_offset, 1);
+    imu::internal::bias_vertex_container acc_bias_vtx_container(vtx_id_offset,imu::internal::bias_vertex::Type::ACC, keyfrms.size());
+    imu::internal::bias_vertex_container gyr_bias_vtx_container(vtx_id_offset,imu::internal::bias_vertex::Type::Gyr, keyfrms.size());
 
     // Set the keyframes to the optimizer
     for (const auto keyfrm : keyfrms) {
@@ -75,13 +76,22 @@ void global_bundle_adjuster::optimize(const unsigned int lead_keyfrm_id_in_globa
         auto keyfrm_vtx = keyfrm_vtx_container.create_vertex(keyfrm, keyfrm->id_ == 0);
         optimizer.addVertex(keyfrm_vtx);
 
-        if (imu::config::valid()) {
+        if (imu::config::available()) {
             auto velocity_vtx = velocity_vtx_container.create_vertex(keyfrm, false);
             optimizer.addVertex(velocity_vtx);
         }
 
         if (enable_inertial_optimization_ && !use_shared_bias_) {
-            // TODO
+            auto acc_bias_vtx = acc_bias_vtx_container.create_vertex(keyfrm->id_, keyfrm->imu_bias_.acc_, false);
+            optimizer.addVertex(acc_bias_vtx);
+            auto gyr_bias_vtx = gyr_bias_vtx_container.create_vertex(keyfrm->id_, keyfrm->imu_bias_.gyr_, false);
+            optimizer.addVertex(gyr_bias_vtx);
+
+            // Add prior to shared bias
+            imu::internal::prior_bias_edge_wrapper pba_edge_wrap(info_prior_acc, acc_bias_vtx);
+            optimizer.addEdge(pba_edge_wrap.edge_);
+            imu::internal::prior_bias_edge_wrapper pbg_edge_wrap(info_prior_gyr, gyr_bias_vtx);
+            optimizer.addEdge(pbg_edge_wrap.edge_);
         }
     }
 
@@ -114,6 +124,8 @@ void global_bundle_adjuster::optimize(const unsigned int lead_keyfrm_id_in_globa
             }
             assert(keyfrm->imu_preintegrator_from_inertial_ref_keyfrm_);
             auto ref_keyfrm = keyfrm->inertial_ref_keyfrm_;
+            assert(fabs(keyfrm->timestamp_-ref_keyfrm->timestamp_
+                        -keyfrm->imu_preintegrator_from_inertial_ref_keyfrm_->preintegrated_->dt_)<0.01);
 
             imu::internal::bias_vertex* acc_bias_vtx1;
             imu::internal::bias_vertex* gyr_bias_vtx1;
@@ -143,10 +155,20 @@ void global_bundle_adjuster::optimize(const unsigned int lead_keyfrm_id_in_globa
                                                                     acc_bias_vtx1, gyr_bias_vtx1,
                                                                     keyfrm_vtx1, velocity_vtx1, keyfrm_vtx2, velocity_vtx2,
                                                                     sqrt_chi_sq, use_huber_kernel_inertial);
-            if (!use_shared_bias_) {
-                // TODO
-            }
+
             optimizer.addEdge(inertial_edge_wrap.edge_);
+
+            if (!use_shared_bias_) {
+                imu::internal::bias_edge_wrapper acc_bias_edge_wrap(keyfrm->imu_preintegrator_from_inertial_ref_keyfrm_->preintegrated_,
+                                                               acc_bias_vtx1,acc_bias_vtx2,
+                                                               sqrt_chi_sq, use_huber_kernel_inertial);
+                optimizer.addEdge(acc_bias_edge_wrap.edge_);
+
+                imu::internal::bias_edge_wrapper gyr_bias_edge_wrap(keyfrm->imu_preintegrator_from_inertial_ref_keyfrm_->preintegrated_,
+                                                               gyr_bias_vtx1,gyr_bias_vtx2,
+                                                               sqrt_chi_sq, use_huber_kernel_inertial);
+                optimizer.addEdge(gyr_bias_edge_wrap.edge_);
+            }
         }
     }
 

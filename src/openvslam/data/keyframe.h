@@ -329,9 +329,6 @@ public:
     //! Velocity
     Vec3_t velocity_ = Vec3_t::Zero();
 
-    //! Velocity is valid or not
-    bool velocity_is_valid_ = false;
-
     //! IMU bias
     imu::bias imu_bias_;
 

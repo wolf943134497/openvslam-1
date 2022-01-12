@@ -123,7 +123,7 @@ Vec3_t preintegrated::get_delta_position_on_bias(const imu::bias& b) {
     return delta_position_ + jacob_position_gyr_ * dbg + jacob_position_acc_ * dba;
 }
 
-MatRC_t<15, 15> preintegrated::get_information() {
+MatRC_t<15, 15> preintegrated::get_information() const {
     MatRC_t<15, 15> information;
     information.block<9, 9>(0, 0) = covariance_.block<9, 9>(0, 0).ldlt().solve(MatRC_t<9, 9>::Identity());
     information.block<6, 6>(9, 9) = (covariance_.block<6, 6>(9, 9).diagonal().cwiseInverse()).asDiagonal();

@@ -42,7 +42,7 @@ inline inertial_edge_wrapper::inertial_edge_wrapper(const std::shared_ptr<preint
                                                     const float sqrt_chi_sq, const bool use_huber_loss) {
     // 拘束条件を設定
     g2o::BaseMultiEdge<9, std::shared_ptr<preintegrated>>* edge;
-    if (imu::config::valid()) {
+    if (imu::config::available()) {
         edge = new inertial_edge_on_camera();
     }
     else {

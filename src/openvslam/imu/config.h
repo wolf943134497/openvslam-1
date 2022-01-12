@@ -26,8 +26,8 @@ public:
     static nlohmann::json to_json();
 
 
-    inline static bool valid(){
-        return instance_.valid_;
+    inline static bool available(){
+        return instance_.available_;
     }
     //---------------------------
     // Setters and Getters
@@ -76,7 +76,7 @@ private:
 
     static config instance_;
 
-    bool valid_{false};
+    bool available_{false};
 
     //! Update rel_pose_ci_ using rel_pose_ic_
     void update_pose();

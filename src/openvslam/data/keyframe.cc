@@ -39,9 +39,6 @@ keyframe::keyframe(const frame& frm, map_database* map_db, bow_database* bow_db)
       log_scale_factor_(frm.log_scale_factor_), scale_factors_(frm.scale_factors_),
       level_sigma_sq_(frm.level_sigma_sq_), inv_level_sigma_sq_(frm.inv_level_sigma_sq_),
 
-      // imu
-      velocity_is_valid_(false),
-
       // observations
       landmarks_(frm.landmarks_),
       // databases
@@ -156,7 +153,7 @@ nlohmann::json keyframe::to_json() const {
     }
     j["velocity"] = convert_matrix_to_json(velocity_);
     j["imu_bias"] = imu_bias_.to_json();
-    if (imu::config::valid()) {
+    if (imu::config::available()) {
         j["imu_config"] = imu::config::get_name();
     }
     return j;

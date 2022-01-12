@@ -14,8 +14,11 @@ namespace internal {
 
 class bias_vertex_container {
 public:
+
+    bias_vertex_container() = delete;
+
     //! Constructor
-    explicit bias_vertex_container(const std::shared_ptr<unsigned int> offset, const unsigned int num_reserve = 50);
+    explicit bias_vertex_container(const std::shared_ptr<unsigned int> offset, bias_vertex::Type type, const unsigned int num_reserve = 50);
 
     //! Destructor
     virtual ~bias_vertex_container() = default;
@@ -70,10 +73,12 @@ private:
 
     //! key: vertex ID, value: frame/keyframe ID
     std::unordered_map<unsigned int, unsigned int> id_container_;
+
+    bias_vertex::Type type_;
 };
 
-inline bias_vertex_container::bias_vertex_container(const std::shared_ptr<unsigned int> offset, const unsigned int num_reserve)
-    : offset_(offset) {
+inline bias_vertex_container::bias_vertex_container(const std::shared_ptr<unsigned int> offset, bias_vertex::Type type, const unsigned int num_reserve)
+    : offset_(offset),type_(type) {
     vtx_container_.reserve(num_reserve);
     vtx_id_container_.reserve(num_reserve);
     id_container_.reserve(num_reserve);
@@ -86,6 +91,7 @@ inline bias_vertex* bias_vertex_container::create_vertex(const unsigned int id,
     const auto vtx_id = *offset_;
     (*offset_)++;
     auto vtx = new bias_vertex();
+    vtx->type = type_;
     vtx->setId(vtx_id);
     vtx->setEstimate(bias);
     vtx->setFixed(is_constant);

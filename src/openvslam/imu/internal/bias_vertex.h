@@ -13,6 +13,12 @@ class bias_vertex final : public g2o::BaseVertex<3, Vec3_t> {
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
+    enum class Type{
+        NOT_SET,
+        Gyr,
+        ACC
+    };
+
     bias_vertex();
 
     bool read(std::istream& is) override;
@@ -22,6 +28,8 @@ public:
     void setToOriginImpl() override;
 
     void oplusImpl(const number_t* update_) override;
+
+    Type type{Type::NOT_SET};
 };
 
 inline bias_vertex::bias_vertex()

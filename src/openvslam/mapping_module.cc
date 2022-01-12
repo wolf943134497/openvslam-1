@@ -182,7 +182,7 @@ void mapping_module::mapping_with_new_keyframe() {
         local_bundle_adjuster_->optimize(cur_keyfrm_, &abort_local_BA_);
     }
 
-    if (imu::config::valid() && !imu_is_initialized_ && !reset_is_requested_) {
+    if (imu::config::available() && !imu_is_initialized_ && !reset_is_requested_) {
         initialize_imu();
     }
 
@@ -198,15 +198,14 @@ void mapping_module::initialize_imu() {
     }
     spdlog::info("start imu initialization with {} keyframes", keyfrms.size());
 
-    imu::imu_util::compute_velocity(keyfrms);
-
-    Mat33_t Rwg = imu::imu_util::compute_gravity_dir(keyfrms);
-
+    Mat33_t Rwg;
     double scale = 1.0;
     const auto imu_initializer = optimize::imu_initializer(200);
-    const double info_prior_gyr = 1e2;
-    const double info_prior_acc = cur_keyfrm_->depth_is_avaliable() ? 1e5 : 1e10;
-    bool succeeded = imu_initializer.initialize(keyfrms, Rwg, scale, cur_keyfrm_->depth_is_avaliable(), info_prior_gyr, info_prior_acc);
+
+    //gyro bias is observable, prior not necessary
+    //acc bias prior should have nothing to do with whether the camera is monocular
+    const double info_prior_acc = 1e5;
+    bool succeeded = imu_initializer.initialize(keyfrms, Rwg, scale, cur_keyfrm_->depth_is_avaliable(), info_prior_acc);
 
     if (!succeeded) {
         return;
@@ -218,7 +217,7 @@ void mapping_module::initialize_imu() {
     const bool use_shared_bias = true;
     optimize::global_bundle_adjuster global_bundle_adjuster(map_db_, 100, use_huber_kernel);
     global_bundle_adjuster.enable_inertial_optimization(true, use_shared_bias);
-    global_bundle_adjuster.optimize(0, nullptr, info_prior_acc, info_prior_gyr);
+    global_bundle_adjuster.optimize(0, nullptr, info_prior_acc, 0);
 
     imu_is_initialized_ = true;
     spdlog::info("imu initialized");

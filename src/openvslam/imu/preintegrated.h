@@ -69,7 +69,7 @@ public:
     Vec3_t get_delta_position_on_bias(const imu::bias& b);
 
     //! Get information matrix
-    MatRC_t<15, 15> get_information();
+    MatRC_t<15, 15> get_information() const;
 
     //! Create json from preintegrated IMU measurement
     nlohmann::json to_json() const;

@@ -19,7 +19,7 @@ void config::fromYaml(const YAML::Node& yaml_node) {
     instance_.update_pose();
     instance_.update_covariance();
 
-    instance_.valid_ = true;
+    instance_.available_ = true;
 }
 
 void config::fromJson(const nlohmann::json& json_imu) {
@@ -34,7 +34,7 @@ void config::fromJson(const nlohmann::json& json_imu) {
     instance_.update_pose();
     instance_.update_covariance();
 
-    instance_.valid_ = true;
+    instance_.available_ = true;
 }
 
 void config::fromPara(std::string name, unsigned int rate_hz, const std::vector<double>& rel_pose_ic,
@@ -50,7 +50,7 @@ void config::fromPara(std::string name, unsigned int rate_hz, const std::vector<
     instance_.update_pose();
     instance_.update_covariance();
 
-    instance_.valid_ = true;
+    instance_.available_ = true;
 }
 
 nlohmann::json config::to_json() {

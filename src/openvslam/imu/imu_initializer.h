@@ -26,7 +26,7 @@ public:
      * Perform optimization
      */
     bool initialize(const std::vector<data::keyframe*>& keyfrms, Mat33_t& Rwg, double& scale,
-                    bool depth_is_avaliable, float info_prior_gyr, float info_prior_acc) const;
+                    bool depth_is_avaliable, float info_prior_acc) const;
 
 private:
     //! number of iterations of optimization

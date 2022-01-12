@@ -464,8 +464,8 @@ void map_database::apply_scale_and_gravity_direction(const Mat33_t& Rwg, const d
         Tcg.block<3, 1>(0, 3) = -Tcg.block<3, 3>(0, 0) * Tgc.block<3, 1>(0, 3);
         keyfrm->set_cam_pose(Tcg);
 
-        // set velocity
-        keyfrm->velocity_ = scale * Tgw.block<3, 3>(0, 0) * keyfrm->velocity_;
+//        // set velocity
+//        keyfrm->velocity_ = scale * Tgw.block<3, 3>(0, 0) * keyfrm->velocity_;
     }
 
     for (auto& lm_pair : landmarks_) {
