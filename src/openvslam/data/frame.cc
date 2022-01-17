@@ -125,6 +125,11 @@ frame::frame(const cv::Mat& img_gray, const cv::Mat& img_depth, const double tim
     assign_keypoints_to_grid(camera_, undist_keypts_, keypt_indices_in_cells_);
 }
 
+void frame::set_cam_pose_pred(const Mat44_t& cam_pose_cw_pred) {
+    cam_pose_cw_pred_ = cam_pose_cw_pred;
+    cam_pose_pred_valid_ = true;
+}
+
 
 void frame::set_cam_pose(const Mat44_t& cam_pose_cw) {
     cam_pose_cw_is_valid_ = true;

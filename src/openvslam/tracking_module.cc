@@ -353,6 +353,8 @@ void tracking_module::track() {
     }
     else if (imu::config::available()) {
         preintegrate_imu();
+        if(imu_is_initialized_)
+            predict_from_imu();
     }
 
     last_tracking_state_ = tracking_state_;
@@ -380,15 +382,17 @@ void tracking_module::track() {
                     std::swap(keyfrms[0],keyfrms[1]);
                 keyfrms.back()->set_imu_preintegrator(imu_preintegrator_from_inertial_ref_keyfrm_,keyfrms[0]);
             }
-            printf("tag0\n");
+
             for (const auto keyfrm : keyfrms) {
                 mapper_->queue_keyframe(keyfrm);
             }
 
-            inertial_ref_keyfrm_ = keyfrms.back();
-
-            if(!imu_preintegrator_from_inertial_ref_keyfrm_)
-                imu_preintegrator_from_inertial_ref_keyfrm_ = new imu::preintegrator(imu::bias());
+            if(imu::config::available())
+            {
+                inertial_ref_keyfrm_ = keyfrms.back();
+                if(!imu_preintegrator_from_inertial_ref_keyfrm_)
+                    imu_preintegrator_from_inertial_ref_keyfrm_ = new imu::preintegrator(imu::bias());
+            }
 
             // state transition to Tracking mode
             tracking_state_ = tracker_state_t::Tracking;
@@ -460,6 +464,13 @@ void tracking_module::track() {
     last_frm_ = curr_frm_;
 }
 
+void tracking_module::predict_from_imu() {
+    auto Twi = inertial_ref_keyfrm_->get_imu_pose_inv();
+    auto v = inertial_ref_keyfrm_->velocity_;
+    auto Twi2 = imu_preintegrator_from_inertial_ref_keyfrm_->predict(Twi,v,imu_bias_);
+    curr_frm_.set_cam_pose_pred(imu::config::get_rel_pose_ci()*Twi2.inverse());
+}
+
 bool tracking_module::initialize() {
     //if is first frame
     if (camera_->setup_type_ == camera::setup_type_t::Monocular && imu::config::available() && initializer_.get_state() == module::initializer_state_t::NotReady) {
@@ -496,7 +507,10 @@ bool tracking_module::track_current_frame() {
 
     if (tracking_state_ == tracker_state_t::Tracking) {
         // Tracking mode
-        if (twist_is_valid_ && last_reloc_frm_id_ + 2 < curr_frm_.id_) {
+        if(curr_frm_.cam_pose_pred_valid_){
+            succeeded = frame_tracker_.predition_based_track(curr_frm_,last_frm_);
+        }
+        if (!succeeded && twist_is_valid_ && last_reloc_frm_id_ + 2 < curr_frm_.id_) {
             // if the motion model is valid
             succeeded = frame_tracker_.motion_based_track(curr_frm_, last_frm_, twist_);
         }

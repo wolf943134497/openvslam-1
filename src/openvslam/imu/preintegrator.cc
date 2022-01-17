@@ -70,6 +70,26 @@ void preintegrator::integrate_new_measurement(const Vec3_t& acc, const Vec3_t& g
     preintegrated_->integrate(acc, gyr, dt, initial_covariance_, bias_covariance_);
 }
 
+Mat44_t preintegrator::predict(const Mat44_t& Twi,const Vec3_t& v, const bias& b) {
+
+    Vec3_t gravity(0,0,-9.81);
+    const Mat33_t delta_rotation = preintegrated_->get_delta_rotation_on_bias(b);
+    const Vec3_t delta_position = preintegrated_->get_delta_position_on_bias(b);
+    const double dt = preintegrated_->dt_;
+
+    const Mat33_t Rwi = Twi.topLeftCorner<3,3>();
+    const Vec3_t twi = Twi.topRightCorner<3,1>();
+    Mat33_t Rwi2 = Rwi*delta_rotation;
+    Vec3_t twi2 = twi +v*dt+0.5*gravity*dt*dt+Rwi*delta_position;
+
+    Mat44_t Twi2;
+    Twi2<<Rwi2,twi2,
+        0,0,0,1;
+
+    return Twi2;
+
+}
+
 nlohmann::json preintegrator::to_json() const {
     nlohmann::json json_preintegrator;
     json_preintegrator["initial_covariance"] = data::convert_matrix_to_json(initial_covariance_);

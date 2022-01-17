@@ -135,6 +135,8 @@ public:
     //! IMU bias
     imu::bias imu_bias_;
 
+    bool imu_is_initialized_{false};
+
     //! depth threshold (Ignore depths farther than true_depth_thr_ times the baseline.)
     double true_depth_thr_ = 40.0;
 
@@ -173,6 +175,8 @@ protected:
 
     //! Main stream of the tracking module
     void track();
+
+    void predict_from_imu();
 
     //! Get last IMU index
     unsigned int get_last_imu_index() const;

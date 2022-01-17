@@ -1,5 +1,6 @@
 #include "openvslam/type.h"
 #include "openvslam/mapping_module.h"
+#include "openvslam/tracking_module.h"
 #include "openvslam/global_optimization_module.h"
 #include "openvslam/data/keyframe.h"
 #include "openvslam/data/landmark.h"
@@ -220,6 +221,8 @@ void mapping_module::initialize_imu() {
     global_bundle_adjuster.optimize(0, nullptr, info_prior_acc, 0);
 
     imu_is_initialized_ = true;
+    tracker_->imu_is_initialized_ = true;
+
     spdlog::info("imu initialized");
 }
 

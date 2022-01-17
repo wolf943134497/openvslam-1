@@ -126,6 +126,7 @@ void viewer::create_menu_panel() {
     menu_follow_camera_ = std::unique_ptr<pangolin::Var<bool>>(new pangolin::Var<bool>("menu.Follow Camera", true, true));
     menu_grid_ = std::unique_ptr<pangolin::Var<bool>>(new pangolin::Var<bool>("menu.Show Grid", false, true));
     menu_show_keyfrms_ = std::unique_ptr<pangolin::Var<bool>>(new pangolin::Var<bool>("menu.Show Keyframes", true, true));
+    menu_show_keyfrms_pred_ = std::unique_ptr<pangolin::Var<bool>>(new pangolin::Var<bool>("menu.Show IMU Prediction", true, true));
     menu_show_lms_ = std::unique_ptr<pangolin::Var<bool>>(new pangolin::Var<bool>("menu.Show Landmarks", true, true));
     menu_show_local_map_ = std::unique_ptr<pangolin::Var<bool>>(new pangolin::Var<bool>("menu.Show Local Map", true, true));
     menu_show_graph_ = std::unique_ptr<pangolin::Var<bool>>(new pangolin::Var<bool>("menu.Show Graph", true, true));
@@ -215,6 +216,18 @@ void viewer::draw_keyframes() {
             draw_camera(keyfrm->get_cam_pose_inv(), w);
         }
     }
+
+    if (*menu_show_keyfrms_pred_) {
+        glLineWidth(keyfrm_line_width_);
+        glColor3f(1,0,0);
+        for (const auto keyfrm : keyfrms) {
+            if (!keyfrm || keyfrm->will_be_erased()) {
+                continue;
+            }
+            draw_camera(keyfrm->get_cam_pose_pred_inv(), w);
+        }
+    }
+
 
     if (*menu_show_graph_) {
         glLineWidth(graph_line_width_);
@@ -371,6 +384,7 @@ void viewer::reset() {
     // reset menu checks
     *menu_follow_camera_ = true;
     *menu_show_keyfrms_ = true;
+    *menu_show_keyfrms_pred_ = true;
     *menu_show_lms_ = true;
     *menu_show_local_map_ = true;
     *menu_show_graph_ = true;

@@ -42,9 +42,12 @@ keyframe::keyframe(const frame& frm, map_database* map_db, bow_database* bow_db)
       // observations
       landmarks_(frm.landmarks_),
       // databases
-      map_db_(map_db), bow_db_(bow_db), bow_vocab_(frm.bow_vocab_) {
+      map_db_(map_db), bow_db_(bow_db), bow_vocab_(frm.bow_vocab_),
+      cam_pose_pred_valid_(frm.cam_pose_pred_valid_) {
     // set pose parameters (cam_pose_wc_, cam_center_) using frm.cam_pose_cw_
     set_cam_pose(frm.cam_pose_cw_);
+    if(cam_pose_pred_valid_)
+        set_cam_pose_pred(frm.cam_pose_cw_pred_);
 }
 
 keyframe::keyframe(const unsigned int id, const unsigned int src_frm_id, const double timestamp,
@@ -72,7 +75,7 @@ keyframe::keyframe(const unsigned int id, const unsigned int src_frm_id, const d
       // others
       landmarks_(std::vector<landmark*>(num_keypts, nullptr)),
       // databases
-      map_db_(map_db), bow_db_(bow_db), bow_vocab_(bow_vocab) {
+      map_db_(map_db), bow_db_(bow_db), bow_vocab_(bow_vocab){
     // compute BoW (bow_vec_, bow_feat_vec_) using descriptors_
     compute_bow();
     // set pose parameters (cam_pose_wc_, cam_center_) using cam_pose_cw_
@@ -173,6 +176,19 @@ void keyframe::set_cam_pose(const Mat44_t& cam_pose_cw) {
     cam_pose_wc_.block<3, 1>(0, 3) = cam_center_;
 }
 
+void keyframe::set_cam_pose_pred(const Mat44_t& cam_pose_cw_pred) {
+    std::lock_guard<std::mutex> lock(mtx_pose_);
+    cam_pose_cw_pred_ = cam_pose_cw_pred;
+
+    const Mat33_t rot_cw = cam_pose_cw_pred_.block<3, 3>(0, 0);
+    const Vec3_t trans_cw = cam_pose_cw_pred_.block<3, 1>(0, 3);
+    const Mat33_t rot_wc = rot_cw.transpose();
+
+    cam_pose_wc_pred_ = Mat44_t::Identity();
+    cam_pose_wc_pred_.block<3, 3>(0, 0) = rot_wc;
+    cam_pose_wc_pred_.block<3, 1>(0, 3) = -rot_wc * trans_cw;
+}
+
 void keyframe::set_cam_pose(const g2o::SE3Quat& cam_pose_cw) {
     set_cam_pose(util::converter::to_eigen_mat(cam_pose_cw));
 }
@@ -180,6 +196,11 @@ void keyframe::set_cam_pose(const g2o::SE3Quat& cam_pose_cw) {
 Mat44_t keyframe::get_cam_pose() const {
     std::lock_guard<std::mutex> lock(mtx_pose_);
     return cam_pose_cw_;
+}
+
+Mat44_t keyframe::get_cam_pose_pred_inv() const {
+    std::lock_guard<std::mutex> lock(mtx_pose_);
+    return cam_pose_wc_pred_;
 }
 
 Mat44_t keyframe::get_cam_pose_inv() const {
@@ -455,11 +476,10 @@ void keyframe::prepare_for_erasing() {
 
     // update inertial references
     if (inertial_referrer_keyfrm_ && inertial_ref_keyfrm_) {
-        if (imu_preintegrator_from_inertial_ref_keyfrm_) {
-            inertial_referrer_keyfrm_->imu_preintegrator_from_inertial_ref_keyfrm_->merge_previous(*imu_preintegrator_from_inertial_ref_keyfrm_);
-        }
-        inertial_referrer_keyfrm_->inertial_ref_keyfrm_ = inertial_ref_keyfrm_;
-        inertial_ref_keyfrm_->inertial_referrer_keyfrm_ = inertial_referrer_keyfrm_;
+        auto preintegrator = inertial_referrer_keyfrm_->imu_preintegrator_from_inertial_ref_keyfrm_;
+        preintegrator->merge_previous(*imu_preintegrator_from_inertial_ref_keyfrm_);
+        inertial_ref_keyfrm_->inertial_referrer_keyfrm_ = nullptr;
+        inertial_referrer_keyfrm_->set_imu_preintegrator(preintegrator,inertial_ref_keyfrm_);
     }
 
     // 3. update frame statistics
@@ -485,6 +505,17 @@ void keyframe::set_imu_preintegrator(imu::preintegrator*& preint_, keyframe* ref
 
     imu_bias_ = ref->imu_bias_;
     //todo: set velocity from preintegrated imu measurement
+}
+
+void keyframe::update_imu_prediction() {
+    if(inertial_ref_keyfrm_)
+    {
+        auto Twi = inertial_ref_keyfrm_->get_imu_pose_inv();
+        auto v = inertial_ref_keyfrm_->velocity_;
+        auto Twi2 = imu_preintegrator_from_inertial_ref_keyfrm_->predict(Twi,v,imu_bias_);
+        cam_pose_cw_pred_ = imu::config::get_rel_pose_ci()*Twi2.inverse();
+    }
+
 }
 
 } // namespace data

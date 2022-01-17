@@ -99,6 +99,17 @@ public:
     Mat44_t get_cam_pose_inv() const;
 
     /**
+     * Set predicted camera pose
+     */
+    void set_cam_pose_pred(const Mat44_t& cam_pose_cw);
+
+    /**
+     * Get inverse of predicted camera pose
+     */
+    Mat44_t get_cam_pose_pred_inv() const;
+
+
+    /**
      * Get the imu pose
      */
     Mat44_t get_imu_pose() const;
@@ -221,6 +232,12 @@ public:
      * set preintegrated imu measurements and the reference frame
      */
     void set_imu_preintegrator(imu::preintegrator*& preint_,keyframe* ref);
+
+    /**
+     * update prediction after pose has changed
+     */
+    void update_imu_prediction();
+
 
     //-----------------------------------------
     // for local map update
@@ -346,6 +363,11 @@ private:
     Mat44_t cam_pose_wc_;
     //! camera center
     Vec3_t cam_center_;
+
+    bool cam_pose_pred_valid_ {false};
+
+    Mat44_t cam_pose_cw_pred_;
+    Mat44_t cam_pose_wc_pred_;
 
     //-----------------------------------------
     // observations
