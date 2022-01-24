@@ -68,9 +68,11 @@ public:
     void integrate_new_measurement(const measurement& m);
     void integrate_new_measurement(const Vec3_t& acc, const Vec3_t& gyr, const double dt);
 
-    //! preditct from given nav state
-    Mat44_t predict(const Mat44_t& Twi,const Vec3_t& v, const bias& b);
+    //! preditct pose from given nav state
+    Mat44_t predict_pose(const Mat44_t& Twi,const Vec3_t& v, const bias& b);
 
+    //! predict velocity from given velocity
+    Vec3_t predict_velo(const Mat44_t& Twi,const Vec3_t& v, const bias& b);
     //! Create json from IMU preintegrator
     nlohmann::json to_json() const;
 

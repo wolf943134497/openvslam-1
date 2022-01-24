@@ -32,7 +32,7 @@ bool imu_initializer::initialize(const std::vector<data::keyframe*>& keyfrms, Ma
     });
 
     int iters = 30;
-    printf("1. estimating gyroscope bias\n");
+//    printf("1. estimating gyroscope bias\n");
     Vec3_t gyr_bias;gyr_bias.setZero();
     Mat33_t Hg;
     Vec3_t bg;
@@ -86,15 +86,15 @@ bool imu_initializer::initialize(const std::vector<data::keyframe*>& keyfrms, Ma
         }
         Vec3_t bg_increment = - Hg.ldlt().solve(bg);
         double rmse = sqrt(error/count);
-        printf("iter: %d, rmse: %.6f inc: %.3f %.3f %.3f\n",iter,rmse,bg_increment[0],bg_increment[1],bg_increment[2]);
+//        printf("iter: %d, rmse: %.6f inc: %.3f %.3f %.3f\n",iter,rmse,bg_increment[0],bg_increment[1],bg_increment[2]);
         if(bg_increment.norm()<1e-6)
             break;
         gyr_bias += bg_increment;
     }
 
-    printf("gyroscope bias: %.6f %.6f %.6f\n",gyr_bias[0],gyr_bias[1],gyr_bias[2]);
+//    printf("gyroscope bias: %.6f %.6f %.6f\n",gyr_bias[0],gyr_bias[1],gyr_bias[2]);
 
-    printf("2. estimating scale, gravity\n");
+//    printf("2. estimating scale, gravity\n");
     scale = 1.0;
     Rwg.setIdentity();
     const Vec3_t gI{0,0,-9.81};
@@ -163,7 +163,7 @@ bool imu_initializer::initialize(const std::vector<data::keyframe*>& keyfrms, Ma
         gW = sgW.tail<3>();
     }
 
-    printf("initial scale: %.3f, initial gW: %.3f %.3f %.3f \n",scale,gW[0],gW[1],gW[2]);
+//    printf("initial scale: %.3f, initial gW: %.3f %.3f %.3f \n",scale,gW[0],gW[1],gW[2]);
 
     gW = gW.normalized()*9.81;
     Vec3_t rotationAxis = (gI.cross(gW)).normalized();
@@ -195,7 +195,7 @@ bool imu_initializer::initialize(const std::vector<data::keyframe*>& keyfrms, Ma
     }
     keyfrms_sorted.back()->velocity_ = keyfrms_sorted[keyfrms_sorted.size()-2]->velocity_;
 
-    printf("3. joint optimization\n");
+//    printf("3. joint optimization\n");
 
     //GN solve
     Vec3_t acc_bias;acc_bias.setZero();
@@ -299,16 +299,16 @@ bool imu_initializer::initialize(const std::vector<data::keyframe*>& keyfrms, Ma
         acc_bias += increment.tail<3>();
 
         double rmse = sqrt(error/count);
-        std::cout<<"iter: "<<iter<<" rmse: "<<rmse<<" inc: "<<increment.norm()<<" scale: "<<scale<<" acc_bias: "<<acc_bias.transpose()<<" gW:"<<(Rwg*gI).transpose()<<std::endl;
+//        std::cout<<"iter: "<<iter<<" rmse: "<<rmse<<" inc: "<<increment.norm()<<" scale: "<<scale<<" acc_bias: "<<acc_bias.transpose()<<" gW:"<<(Rwg*gI).transpose()<<std::endl;
         if(increment.norm()<1e-6)
             break;
     }
 
     printf("scale: %.3f\n",scale);
-    std::cout<<"Rwg: "<<Rwg<<std::endl;
-    for(int i=0;i<keyfrms_sorted.size();i++)
-        std::cout<<"v"<<i<<" "<<keyfrms_sorted[i]->velocity_.transpose()<<std::endl;
-    std::cout<<"acc_bias: "<<acc_bias.transpose()<<std::endl;
+    std::cout<<"gW: "<<(Rwg*gI).transpose()<<std::endl;
+//    for(int i=0;i<keyfrms_sorted.size();i++)
+//        std::cout<<"v"<<i<<" "<<keyfrms_sorted[i]->velocity_.transpose()<<std::endl;
+//    std::cout<<"acc_bias: "<<acc_bias.transpose()<<std::endl;
 
     imu::bias bias(acc_bias,gyr_bias);
     for(auto keyfrm: keyfrms)

@@ -90,6 +90,16 @@ private:
     void draw_keyframes();
 
     /**
+     * Get and draw imu predictions via the map publisher
+     */
+    void draw_predictions();
+
+    /**
+    * draw nonekeyframes
+    */
+    void draw_frames();
+
+    /**
      * Get and draw landmarks via the map publisher
      */
     void draw_landmarks();

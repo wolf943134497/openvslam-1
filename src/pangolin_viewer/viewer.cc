@@ -85,6 +85,10 @@ void viewer::run() {
         draw_keyframes();
         // draw landmarks
         draw_landmarks();
+        //draw prediction
+        draw_predictions();
+        //draw nonkeyframes
+        draw_frames();
 
         pangolin::FinishFrame();
 
@@ -217,17 +221,6 @@ void viewer::draw_keyframes() {
         }
     }
 
-    if (*menu_show_keyfrms_pred_) {
-        glLineWidth(keyfrm_line_width_);
-        glColor3f(1,0,0);
-        for (const auto keyfrm : keyfrms) {
-            if (!keyfrm || keyfrm->will_be_erased()) {
-                continue;
-            }
-            draw_camera(keyfrm->get_cam_pose_pred_inv(), w);
-        }
-    }
-
 
     if (*menu_show_graph_) {
         glLineWidth(graph_line_width_);
@@ -284,6 +277,30 @@ void viewer::draw_keyframes() {
         }
 
         glEnd();
+    }
+}
+
+void viewer::draw_predictions() {
+    if (*menu_show_keyfrms_pred_) {
+        const float w = keyfrm_size_ * *menu_frm_size_;
+        glLineWidth(keyfrm_line_width_);
+        glColor3f(1,1,0);
+        auto cam_pose_wc_predicts = map_publisher_->get_cam_pose_predicts();
+        for (const auto pose : cam_pose_wc_predicts) {
+            draw_camera(pose, w);
+        }
+    }
+}
+
+void viewer::draw_frames() {
+    if (*menu_show_keyfrms_) {
+        const float w = keyfrm_size_ * *menu_frm_size_;
+        glLineWidth(keyfrm_line_width_);
+        glColor3f(1,1,1);
+        auto cam_pose_wc = map_publisher_->get_cam_poses();
+        for (const auto pose : cam_pose_wc) {
+            draw_camera(pose, w);
+        }
     }
 }
 

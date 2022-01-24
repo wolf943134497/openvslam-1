@@ -40,6 +40,17 @@ public:
      */
     void set_current_cam_pose(const Mat44_t& cam_pose_cw);
 
+    void clear_cam_pose_predicts();
+
+    void add_cam_pose_predicts(const Mat44_t& cam_pose_cw_pred);
+
+    std::vector<Mat44_t> get_cam_pose_predicts();
+
+    void clear_cam_poses();
+
+    void add_cam_poses(const Mat44_t& cam_pose_wc);
+
+    std::vector<Mat44_t> get_cam_poses();
     /**
      * Get current camera pose
      * NOTE: should be accessed from viewer thread
@@ -88,6 +99,12 @@ private:
     std::mutex mtx_cam_pose_;
     Mat44_t cam_pose_cw_ = Mat44_t::Identity();
     Mat44_t cam_pose_wc_ = Mat44_t::Identity();
+
+    std::mutex mtx_cam_pose_pred;
+    std::vector<Mat44_t> cam_pose_wc_predicts_;
+
+    std::mutex mtx_cam_poses_;
+    std::vector<Mat44_t> cam_poses_wc_;
 };
 
 } // namespace publish

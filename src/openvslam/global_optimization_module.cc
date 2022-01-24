@@ -88,6 +88,8 @@ void global_optimization_module::run() {
             continue;
         }
 
+
+
         // dequeue the keyframe from the queue -> cur_keyfrm_
         {
             std::lock_guard<std::mutex> lock(mtx_keyfrm_queue_);
@@ -116,7 +118,7 @@ void global_optimization_module::run() {
             cur_keyfrm_->set_to_be_erased();
             continue;
         }
-
+        spdlog::info("tag8");
         correct_loop();
     }
 
@@ -217,6 +219,7 @@ void global_optimization_module::correct_loop() {
         thread_for_loop_BA_->join();
         thread_for_loop_BA_.reset(nullptr);
     }
+
     thread_for_loop_BA_ = std::unique_ptr<std::thread>(new std::thread(&module::loop_bundle_adjuster::optimize, loop_bundle_adjuster_.get(), cur_keyfrm_->id_));
 
     // 6. post-processing

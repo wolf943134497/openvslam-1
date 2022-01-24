@@ -181,6 +181,8 @@ void mapping_module::mapping_with_new_keyframe() {
     abort_local_BA_ = false;
     if (2 < map_db_->get_num_keyframes()) {
         local_bundle_adjuster_->optimize(cur_keyfrm_, &abort_local_BA_);
+        if(imu_is_initialized_)
+            local_bundle_adjuster_->optimize_imu(cur_keyfrm_,&abort_local_BA_);
     }
 
     if (imu::config::available() && !imu_is_initialized_ && !reset_is_requested_) {
@@ -192,6 +194,7 @@ void mapping_module::mapping_with_new_keyframe() {
 
 void mapping_module::initialize_imu() {
     auto keyfrms = imu::imu_util::gather_intertial_ref_keyframes(cur_keyfrm_);
+//    const float min_time = cur_keyfrm_->depth_is_avaliable() ? 1.0 : 2.0;
     const float min_time = cur_keyfrm_->depth_is_avaliable() ? 1.0 : 2.0;
     const int min_keyfrms = 10;
     if (keyfrms.size() < min_keyfrms || cur_keyfrm_->timestamp_ - keyfrms.back()->timestamp_ < min_time) {
@@ -212,7 +215,9 @@ void mapping_module::initialize_imu() {
         return;
     }
 
+
     map_db_->apply_scale_and_gravity_direction(Rwg, scale);
+
 
     const bool use_huber_kernel = true;
     const bool use_shared_bias = true;
@@ -220,10 +225,17 @@ void mapping_module::initialize_imu() {
     global_bundle_adjuster.enable_inertial_optimization(true, use_shared_bias);
     global_bundle_adjuster.optimize(0, nullptr, info_prior_acc, 0);
 
-    imu_is_initialized_ = true;
-    tracker_->imu_is_initialized_ = true;
+    if(fabs(scale-1)<0.01)
+    {
+        imu_is_initialized_ = true;
+        local_bundle_adjuster_->set_enable_inertial_optimization(true);
+        tracker_->imu_is_initialized_ = true;
+        spdlog::info("imu initialized");
+    }
 
-    spdlog::info("imu initialized");
+
+
+
 }
 
 void mapping_module::store_new_keyframe() {

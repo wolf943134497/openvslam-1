@@ -169,7 +169,8 @@ std::shared_ptr<Mat44_t> tracking_module::track_monocular_image(const cv::Mat& i
 
     const auto end = std::chrono::system_clock::now();
     elapsed_ms_ = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-
+    std::cout<<curr_frm_.id_<<" "<<curr_frm_.get_cam_pose().topRightCorner<3,1>().transpose()<<std::endl;
+    std::cout<<"------------------------"<<std::endl;
     std::shared_ptr<Mat44_t> cam_pose_wc = nullptr;
     if (curr_frm_.cam_pose_cw_is_valid_) {
         cam_pose_wc = std::allocate_shared<Mat44_t>(Eigen::aligned_allocator<Mat44_t>(), curr_frm_.get_cam_pose_inv());
@@ -326,6 +327,10 @@ void tracking_module::preintegrate_imu() {
         return;
     }
 
+    if(imu_preintegrator_from_last_frm)
+        delete imu_preintegrator_from_last_frm;
+    imu_preintegrator_from_last_frm = new imu::preintegrator(imu::bias());
+
     for (unsigned int i = 0; i < n - 1; i++) {
         double dt;
         Vec3_t acc, gyr;
@@ -344,6 +349,7 @@ void tracking_module::preintegrate_imu() {
         }
 
         imu_preintegrator_from_inertial_ref_keyfrm_->integrate_new_measurement(acc, gyr, dt);
+        imu_preintegrator_from_last_frm->integrate_new_measurement(acc,gyr,dt);
     }
 }
 
@@ -353,8 +359,6 @@ void tracking_module::track() {
     }
     else if (imu::config::available()) {
         preintegrate_imu();
-        if(imu_is_initialized_)
-            predict_from_imu();
     }
 
     last_tracking_state_ = tracking_state_;
@@ -404,6 +408,9 @@ void tracking_module::track() {
         // update the camera pose of the last frame
         // because the mapping module might optimize the camera pose of the last frame's reference keyframe
         update_last_frame();
+
+        if(imu_is_initialized_)
+            predict_from_imu();
 
         // set the reference keyframe of the current frame
         curr_frm_.ref_keyfrm_ = last_frm_.ref_keyfrm_;
@@ -465,10 +472,18 @@ void tracking_module::track() {
 }
 
 void tracking_module::predict_from_imu() {
+    prediction_is_valid_ = false;
     auto Twi = inertial_ref_keyfrm_->get_imu_pose_inv();
+    if(!inertial_ref_keyfrm_->velocity_valid_)
+        return;
     auto v = inertial_ref_keyfrm_->velocity_;
-    auto Twi2 = imu_preintegrator_from_inertial_ref_keyfrm_->predict(Twi,v,imu_bias_);
-    curr_frm_.set_cam_pose_pred(imu::config::get_rel_pose_ci()*Twi2.inverse());
+    auto Twi2 = imu_preintegrator_from_inertial_ref_keyfrm_->predict_pose(Twi,v,inertial_ref_keyfrm_->imu_bias_);
+    T_cw_pred_ = imu::config::get_rel_pose_ci()*Twi2.inverse();
+    prediction_is_valid_ = true;
+    std::cout<<inertial_ref_keyfrm_->id_<<" "<<inertial_ref_keyfrm_->get_cam_pose().topRightCorner<3,1>().transpose()<<" "<<inertial_ref_keyfrm_->velocity_.transpose()<<std::endl;
+    std::cout<<curr_frm_.id_<<" "<<T_cw_pred_.topRightCorner<3,1>().transpose();
+    std::cout<<" dist2: "<<(T_cw_pred_.topLeftCorner<3,3>().transpose()*T_cw_pred_.topRightCorner<3,1>()
+        +inertial_ref_keyfrm_->get_cam_pose_inv().topRightCorner<3,1>()).norm()<<std::endl;
 }
 
 bool tracking_module::initialize() {
@@ -507,9 +522,9 @@ bool tracking_module::track_current_frame() {
 
     if (tracking_state_ == tracker_state_t::Tracking) {
         // Tracking mode
-        if(curr_frm_.cam_pose_pred_valid_){
-            succeeded = frame_tracker_.predition_based_track(curr_frm_,last_frm_);
-        }
+//        if(prediction_is_valid_){
+//            succeeded = frame_tracker_.predition_based_track(curr_frm_,last_frm_,T_cw_pred_);
+//        }
         if (!succeeded && twist_is_valid_ && last_reloc_frm_id_ + 2 < curr_frm_.id_) {
             // if the motion model is valid
             succeeded = frame_tracker_.motion_based_track(curr_frm_, last_frm_, twist_);
@@ -774,14 +789,16 @@ void tracking_module::insert_new_keyframe() {
         return;
     }
 
+
     // set the reference keyframe with the new keyframe
     curr_frm_.ref_keyfrm_ = new_keyfrm;
+    curr_frm_.is_keyframe_ = true;
 
     if (imu::config::available()) {
         new_keyfrm->set_imu_preintegrator(imu_preintegrator_from_inertial_ref_keyfrm_,inertial_ref_keyfrm_);
 
         inertial_ref_keyfrm_ = new_keyfrm;
-        imu_preintegrator_from_inertial_ref_keyfrm_ = new imu::preintegrator(imu_bias_);
+        imu_preintegrator_from_inertial_ref_keyfrm_ = new imu::preintegrator(new_keyfrm->imu_bias_);
     }
 }
 

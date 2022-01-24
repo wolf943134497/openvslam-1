@@ -102,12 +102,6 @@ public:
     void set_cam_pose(const Mat44_t& cam_pose_cw);
 
     /**
-     * Set camera pose prediction
-     * @param cam_pose_cw
-     */
-    void set_cam_pose_pred(const Mat44_t& cam_pose_cw_pred);
-
-    /**
      * Set camera pose and refresh rotation and translation
      * @param cam_pose_cw
      */
@@ -245,12 +239,9 @@ public:
     bool cam_pose_cw_is_valid_ = false;
     Mat44_t cam_pose_cw_;
 
-    //! predicted camera pose: world -> camera
-    bool cam_pose_pred_valid_ {false};
-    Mat44_t cam_pose_cw_pred_;
-
     //! reference keyframe for tracking
     keyframe* ref_keyfrm_ = nullptr;
+    bool is_keyframe_{false};
 
     // ORB scale pyramid information
     //! number of scale levels

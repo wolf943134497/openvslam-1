@@ -257,7 +257,17 @@ std::shared_ptr<Mat44_t> system::feed_monocular_frame(const cv::Mat& img, const 
     if (tracker_->tracking_state_ == tracker_state_t::Tracking && cam_pose_wc) {
         map_publisher_->set_current_cam_pose(tracker_->curr_frm_.get_cam_pose());
         map_publisher_->set_current_cam_pose_wc(*cam_pose_wc);
+//        map_publisher_->add_cam_poses(*cam_pose_wc);
+//        if(tracker_->curr_frm_.is_keyframe_)
+//            map_publisher_->clear_cam_poses();
     }
+    if(tracker_->prediction_is_valid_)
+    {
+        map_publisher_->add_cam_pose_predicts(tracker_->T_cw_pred_);
+        if(tracker_->curr_frm_.is_keyframe_)
+            map_publisher_->clear_cam_pose_predicts();
+    }
+
 
     return cam_pose_wc;
 }

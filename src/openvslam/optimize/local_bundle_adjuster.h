@@ -33,11 +33,18 @@ public:
      */
     void optimize(data::keyframe* curr_keyfrm, bool* const force_stop_flag) const;
 
+    void optimize_imu(data::keyframe* curr_keyfrm, bool* const force_stop_flag) const;
+
+    void set_enable_inertial_optimization(bool v);
+
 private:
     //! number of iterations of first optimization
     const unsigned int num_first_iter_;
     //! number of iterations of second optimization
     const unsigned int num_second_iter_;
+
+    //! enable inertial optimization or not
+    bool enable_inertial_optimization_{false};
 };
 
 } // namespace optimize

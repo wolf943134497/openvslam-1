@@ -98,15 +98,6 @@ public:
      */
     Mat44_t get_cam_pose_inv() const;
 
-    /**
-     * Set predicted camera pose
-     */
-    void set_cam_pose_pred(const Mat44_t& cam_pose_cw);
-
-    /**
-     * Get inverse of predicted camera pose
-     */
-    Mat44_t get_cam_pose_pred_inv() const;
 
 
     /**
@@ -346,6 +337,8 @@ public:
     //! Velocity
     Vec3_t velocity_ = Vec3_t::Zero();
 
+    std::atomic<bool> velocity_valid_{false};
+
     //! IMU bias
     imu::bias imu_bias_;
 
@@ -364,10 +357,6 @@ private:
     //! camera center
     Vec3_t cam_center_;
 
-    bool cam_pose_pred_valid_ {false};
-
-    Mat44_t cam_pose_cw_pred_;
-    Mat44_t cam_pose_wc_pred_;
 
     //-----------------------------------------
     // observations

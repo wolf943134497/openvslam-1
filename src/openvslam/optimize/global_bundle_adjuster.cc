@@ -76,7 +76,7 @@ void global_bundle_adjuster::optimize(const unsigned int lead_keyfrm_id_in_globa
         auto keyfrm_vtx = keyfrm_vtx_container.create_vertex(keyfrm, keyfrm->id_ == 0);
         optimizer.addVertex(keyfrm_vtx);
 
-        if (imu::config::available()) {
+        if (enable_inertial_optimization_) {
             auto velocity_vtx = velocity_vtx_container.create_vertex(keyfrm, false);
             optimizer.addVertex(velocity_vtx);
         }
@@ -269,6 +269,7 @@ void global_bundle_adjuster::optimize(const unsigned int lead_keyfrm_id_in_globa
             if (keyfrm->inertial_ref_keyfrm_) {
                 auto velocity_vtx = static_cast<imu::internal::velocity_vertex*>(velocity_vtx_container.get_vertex(keyfrm));
                 keyfrm->velocity_ = velocity_vtx->estimate();
+                keyfrm->velocity_valid_ = true;
                 if (use_shared_bias_) {
                     auto gyr_bias_vtx = static_cast<imu::internal::bias_vertex*>(gyr_bias_vtx_container.get_vertex(keyfrms.back()));
                     auto acc_bias_vtx = static_cast<imu::internal::bias_vertex*>(acc_bias_vtx_container.get_vertex(keyfrms.back()));

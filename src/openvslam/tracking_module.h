@@ -131,11 +131,14 @@ public:
 
     //! IMU preintegrator from inertial reference keyframe
     imu::preintegrator* imu_preintegrator_from_inertial_ref_keyfrm_ = nullptr;
-
-    //! IMU bias
-    imu::bias imu_bias_;
+    imu::preintegrator* imu_preintegrator_from_last_frm = nullptr;
 
     bool imu_is_initialized_{false};
+
+    //! current pose predicted from IMU
+    Mat44_t T_cw_pred_;
+    //! prediction is valid or not
+    bool prediction_is_valid_ = false;
 
     //! depth threshold (Ignore depths farther than true_depth_thr_ times the baseline.)
     double true_depth_thr_ = 40.0;

@@ -2,6 +2,7 @@
 #include "openvslam/imu/preintegrated.h"
 #include "openvslam/data/common.h"
 #include <nlohmann/json.hpp>
+#include "iostream"
 
 namespace openvslam {
 namespace imu {
@@ -70,24 +71,41 @@ void preintegrator::integrate_new_measurement(const Vec3_t& acc, const Vec3_t& g
     preintegrated_->integrate(acc, gyr, dt, initial_covariance_, bias_covariance_);
 }
 
-Mat44_t preintegrator::predict(const Mat44_t& Twi,const Vec3_t& v, const bias& b) {
+Mat44_t preintegrator::predict_pose(const Mat44_t& Twi, const Vec3_t& v, const bias& b) {
 
     Vec3_t gravity(0,0,-9.81);
     const Mat33_t delta_rotation = preintegrated_->get_delta_rotation_on_bias(b);
     const Vec3_t delta_position = preintegrated_->get_delta_position_on_bias(b);
     const double dt = preintegrated_->dt_;
 
+
     const Mat33_t Rwi = Twi.topLeftCorner<3,3>();
     const Vec3_t twi = Twi.topRightCorner<3,1>();
     Mat33_t Rwi2 = Rwi*delta_rotation;
     Vec3_t twi2 = twi +v*dt+0.5*gravity*dt*dt+Rwi*delta_position;
 
+    std::cout<<"dt: "<<dt<<" delta_position:"<<delta_position.transpose()<<std::endl;
+    std::cout<<"v: "<<v.transpose()<<std::endl;
+    std::cout<<"twi: "<<twi.transpose()<<std::endl;
+    std::cout<<"twi2: "<<twi2.transpose()<<std::endl;
+    std::cout<<"dist: "<<(twi2-twi).norm()<<std::endl;
     Mat44_t Twi2;
     Twi2<<Rwi2,twi2,
         0,0,0,1;
 
     return Twi2;
 
+}
+
+Vec3_t preintegrator::predict_velo(const Mat44_t& Twi, const Vec3_t& vi, const bias& b) {
+    Vec3_t gravity(0,0,-9.81);
+    const Vec3_t delta_velocity = preintegrated_->get_delta_velocity_on_bias(b);
+    const double dt = preintegrated_->dt_;
+
+    const Mat33_t Rwi = Twi.topLeftCorner<3,3>();
+
+    Vec3_t vj = Rwi*delta_velocity+vi+gravity*dt;
+    return vj;
 }
 
 nlohmann::json preintegrator::to_json() const {

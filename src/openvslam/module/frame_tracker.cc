@@ -54,11 +54,11 @@ bool frame_tracker::motion_based_track(data::frame& curr_frm, const data::frame&
     }
 }
 
-bool frame_tracker::predition_based_track(data::frame& curr_frm,const data::frame& last_frm) const {
+bool frame_tracker::predition_based_track(data::frame& curr_frm,const data::frame& last_frm, const Mat44_t& T_cw_pred) const {
     match::projection projection_matcher(0.9, true);
 
     // Set the initial pose by using the motion model
-    curr_frm.set_cam_pose(curr_frm.cam_pose_cw_pred_);
+    curr_frm.set_cam_pose(T_cw_pred);
 
     // Initialize the 2D-3D matches
     std::fill(curr_frm.landmarks_.begin(), curr_frm.landmarks_.end(), nullptr);
@@ -80,6 +80,10 @@ bool frame_tracker::predition_based_track(data::frame& curr_frm,const data::fram
 
     // Pose optimization
     pose_optimizer_.optimize(curr_frm);
+
+//    std::cout<<"predicted: "<<T_cw_pred<<std::endl;
+//    std::cout<<"tracked  : "<<curr_frm.get_cam_pose()<<std::endl;
+//    std::cout<<"--------------"<<std::endl;
 
     // Discard the outliers
     const auto num_valid_matches = discard_outliers(curr_frm);
