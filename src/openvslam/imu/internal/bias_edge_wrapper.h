@@ -7,7 +7,6 @@
 
 #include "openvslam/imu/preintegrated.h"
 #include "openvslam/imu/internal/inertial_edge_on_camera.h"
-#include "openvslam/imu/internal/inertial_edge_on_imu.h"
 
 #include <g2o/core/robust_kernel_impl.h>
 #include <g2o/core/base_binary_edge.h>

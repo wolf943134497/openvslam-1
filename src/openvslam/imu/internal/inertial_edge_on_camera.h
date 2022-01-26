@@ -105,7 +105,7 @@ inline void inertial_edge_on_camera::linearizeOplus() {
     //----------------nav state 1
     Mat44_t Tcw1 = keyfrm_vtx1->estimate().to_homogeneous_matrix();
     //jacobian of right pertubation to left pertubation
-    Mat66_t J_cw1r_cw1l = util::converter::adjoint(util::converter::inv(Tcw1));
+    Mat66_t J_Tcw1r_Tcw1l = util::converter::adjoint(util::converter::inv(Tcw1));
 
     Mat44_t Twi1 = util::converter::inv(Tcw1)*imu::config::get_rel_pose_ci();
     //jacobian of right pertubation on Twi1 to right pertubation on Tcw1
@@ -118,7 +118,7 @@ inline void inertial_edge_on_camera::linearizeOplus() {
     //----------------nav state 2
     Mat44_t Tcw2 = keyfrm_vtx2->estimate().to_homogeneous_matrix();
     //jacobian of right pertubation to left pertubation
-    Mat66_t J_cw2r_cw2l = util::converter::adjoint(util::converter::inv(Tcw2));
+    Mat66_t J_Tcw2r_Tcw2l = util::converter::adjoint(util::converter::inv(Tcw2));
 
     Mat44_t Twi2 = util::converter::inv(Tcw2)*imu::config::get_rel_pose_ci();
     //jacobian of right pertubation on Twi2 to right pertubation on Tcw2
@@ -147,7 +147,7 @@ inline void inertial_edge_on_camera::linearizeOplus() {
             J_dP_twi1,J_dP_Rwi1;
 
     //chain rule
-    Eigen::Matrix<double,9,6> J_Tcw1_l = J_Twi1*J_Twi1_Tcw1_r*J_cw1r_cw1l;
+    Eigen::Matrix<double,9,6> J_Tcw1_l = J_Twi1*J_Twi1_Tcw1_r*J_Tcw1r_Tcw1l;
     
 
     Mat33_t J_dR_Rwi2 = inv_right_jacobian;
@@ -158,7 +158,7 @@ inline void inertial_edge_on_camera::linearizeOplus() {
         J_dP_twi2,Zero3x3;
     
     //chain rule
-    Eigen::Matrix<double,9,6> J_Tcw2_l = J_Twi2*J_Twi2_Tcw2_r*J_cw2r_cw2l;
+    Eigen::Matrix<double,9,6> J_Tcw2_l = J_Twi2*J_Twi2_Tcw2_r*J_Tcw2r_Tcw2l;
 
     // Jacobians wrt Pose 1
     _jacobianOplus[0].setZero();
