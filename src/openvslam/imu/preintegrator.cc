@@ -84,11 +84,6 @@ Mat44_t preintegrator::predict_pose(const Mat44_t& Twi, const Vec3_t& v, const b
     Mat33_t Rwi2 = Rwi*delta_rotation;
     Vec3_t twi2 = twi +v*dt+0.5*gravity*dt*dt+Rwi*delta_position;
 
-    std::cout<<"dt: "<<dt<<" delta_position:"<<delta_position.transpose()<<std::endl;
-    std::cout<<"v: "<<v.transpose()<<std::endl;
-    std::cout<<"twi: "<<twi.transpose()<<std::endl;
-    std::cout<<"twi2: "<<twi2.transpose()<<std::endl;
-    std::cout<<"dist: "<<(twi2-twi).norm()<<std::endl;
     Mat44_t Twi2;
     Twi2<<Rwi2,twi2,
         0,0,0,1;

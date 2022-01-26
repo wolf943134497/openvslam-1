@@ -33,11 +33,21 @@ public:
      */
     void optimize(data::keyframe* curr_keyfrm, bool* const force_stop_flag) const;
 
-    void optimize_imu(data::keyframe* curr_keyfrm, bool* const force_stop_flag) const;
-
+    /**
+     * set whether use imu
+     * @param v
+     */
     void set_enable_inertial_optimization(bool v);
 
 private:
+
+    /**
+     * inertial only optimization
+     * @param local_keyfrms
+     * @param force_stop_flag
+     */
+    void optimize_imu(std::vector<data::keyframe*> local_keyfrms, bool* const force_stop_flag) const;
+
     //! number of iterations of first optimization
     const unsigned int num_first_iter_;
     //! number of iterations of second optimization

@@ -102,40 +102,75 @@ inline void inertial_edge_on_camera::linearizeOplus() {
     const Mat33_t jacob_velocity_acc = _measurement->jacob_velocity_acc_;
     const Mat33_t jacob_position_acc = _measurement->jacob_position_acc_;
 
-    const Mat33_t Rcw1 = keyfrm_vtx1->estimate().rotation().toRotationMatrix();
-    const Mat33_t Riw1 = imu::config::get_rel_rot_ic() * Rcw1;
-    const Mat33_t Rwi1 = Riw1.transpose();
-    const Vec3_t tcw1 = keyfrm_vtx1->estimate().translation();
-    const Vec3_t twi1 = -Rwi1 * (imu::config::get_rel_rot_ic() * tcw1 + imu::config::get_rel_trans_ic());
-    const Mat33_t Rcw2 = keyfrm_vtx2->estimate().rotation().toRotationMatrix();
-    const Mat33_t Riw2 = imu::config::get_rel_rot_ic() * Rcw2;
-    const Mat33_t Rwi2 = Riw2.transpose();
-    const Vec3_t tcw2 = keyfrm_vtx2->estimate().translation();
-    const Vec3_t twi2 = -Rwi2 * (imu::config::get_rel_rot_ic() * tcw2 + imu::config::get_rel_trans_ic());
+    //----------------nav state 1
+    Mat44_t Tcw1 = keyfrm_vtx1->estimate().to_homogeneous_matrix();
+    //jacobian of right pertubation to left pertubation
+    Mat66_t J_cw1r_cw1l = util::converter::adjoint(util::converter::inv(Tcw1));
 
-    const Vec3_t v1 = velocity_vtx1->estimate();
+    Mat44_t Twi1 = util::converter::inv(Tcw1)*imu::config::get_rel_pose_ci();
+    //jacobian of right pertubation on Twi1 to right pertubation on Tcw1
+    Mat66_t J_Twi1_Tcw1_r = -util::converter::adjoint(util::converter::inv(Twi1));
+
+    Mat33_t Rwi1 = Twi1.topLeftCorner<3,3>();
+    Vec3_t twi1 = Twi1.topRightCorner<3,1>();
+    Vec3_t v1 = velocity_vtx1->estimate();
+
+    //----------------nav state 2
+    Mat44_t Tcw2 = keyfrm_vtx2->estimate().to_homogeneous_matrix();
+    //jacobian of right pertubation to left pertubation
+    Mat66_t J_cw2r_cw2l = util::converter::adjoint(util::converter::inv(Tcw2));
+
+    Mat44_t Twi2 = util::converter::inv(Tcw2)*imu::config::get_rel_pose_ci();
+    //jacobian of right pertubation on Twi2 to right pertubation on Tcw2
+    Mat66_t J_Twi2_Tcw2_r = -util::converter::adjoint(util::converter::inv(Twi2));
+
+    Mat33_t Rwi2 = Twi2.topLeftCorner<3,3>();
+    Vec3_t twi2 = Twi2.topRightCorner<3,1>();
     const Vec3_t v2 = velocity_vtx2->estimate();
 
     const Mat33_t delta_rotation = _measurement->get_delta_rotation_on_bias(b);
-    const Mat33_t error_rotation = delta_rotation.transpose() * Riw1 * Rwi2;
+    const Mat33_t error_rotation = delta_rotation.transpose() * Rwi1.transpose() * Rwi2;
     const Mat33_t inv_right_jacobian = util::converter::inverse_right_jacobian_so3(util::converter::log_so3(error_rotation));
     const double dt = _measurement->dt_;
 
-    const Mat33_t rel_rot_ci = imu::config::get_rel_rot_ic().transpose();
-    const Mat33_t rel_rot_ic = imu::config::get_rel_rot_ic();
+
+    Mat33_t J_dR_Rwi1 = -inv_right_jacobian * Rwi2.transpose() * Rwi1;
+    Mat33_t J_dV_Rwi1 = util::converter::to_skew_symmetric_mat(Rwi1.transpose() * (v2 - v1 - gravity * dt));
+    Mat33_t J_dP_Rwi1 = util::converter::to_skew_symmetric_mat(Rwi1.transpose() * (twi2 - twi1 - v1 * dt - 0.5 * gravity * dt * dt));
+    Mat33_t J_dP_twi1 = -Eigen::Matrix3d::Identity();
+    Mat33_t Zero3x3;    Zero3x3.setZero();
+
+
+    Eigen::Matrix<double,9,6> J_Twi1;
+    J_Twi1<<Zero3x3,J_dR_Rwi1,
+            Zero3x3,J_dV_Rwi1,
+            J_dP_twi1,J_dP_Rwi1;
+
+    //chain rule
+    Eigen::Matrix<double,9,6> J_Tcw1_l = J_Twi1*J_Twi1_Tcw1_r*J_cw1r_cw1l;
+    
+
+    Mat33_t J_dR_Rwi2 = inv_right_jacobian;
+    Mat33_t J_dP_twi2 = Rwi1.transpose() * Rwi2;
+    Eigen::Matrix<double,9,6> J_Twi2;
+    J_Twi2<<Zero3x3,J_dR_Rwi2,
+        Zero3x3,Zero3x3,
+        J_dP_twi2,Zero3x3;
+    
+    //chain rule
+    Eigen::Matrix<double,9,6> J_Tcw2_l = J_Twi2*J_Twi2_Tcw2_r*J_cw2r_cw2l;
+
     // Jacobians wrt Pose 1
     _jacobianOplus[0].setZero();
-    // rotation
-    _jacobianOplus[0].block<3, 3>(0, 0) = -inv_right_jacobian * Riw2 * Rwi1 * rel_rot_ic;
-    _jacobianOplus[0].block<3, 3>(3, 0) = util::converter::to_skew_symmetric_mat(Riw1 * (v2 - v1 - gravity * dt)) * rel_rot_ic;
-    _jacobianOplus[0].block<3, 3>(6, 0) = util::converter::to_skew_symmetric_mat(Riw1 * (twi2 - twi1 - v1 * dt - 0.5 * gravity * dt * dt)) * rel_rot_ic;
-    // translation
-    _jacobianOplus[0].block<3, 3>(6, 3) = -Eigen::Matrix3d::Identity() * rel_rot_ic;
+    //swap translation and rotation part
+    _jacobianOplus[0].leftCols(3) = J_Tcw1_l.rightCols(3);
+    _jacobianOplus[0].rightCols(3) = J_Tcw1_l.leftCols(3);
+
 
     // Jacobians wrt Velocity 1
     _jacobianOplus[1].setZero();
-    _jacobianOplus[1].block<3, 3>(3, 0) = -Riw1;
-    _jacobianOplus[1].block<3, 3>(6, 0) = -Riw1 * dt;
+    _jacobianOplus[1].block<3, 3>(3, 0) = -Rwi1.transpose();
+    _jacobianOplus[1].block<3, 3>(6, 0) = -Rwi1.transpose() * dt;
 
     // Jacobians wrt Gyro 1
     _jacobianOplus[2].setZero();
@@ -151,14 +186,13 @@ inline void inertial_edge_on_camera::linearizeOplus() {
 
     // Jacobians wrt Pose 2
     _jacobianOplus[4].setZero();
-    // rotation
-    _jacobianOplus[4].block<3, 3>(0, 3) = inv_right_jacobian * rel_rot_ic;
-    // translation
-    _jacobianOplus[4].block<3, 3>(6, 0) = Riw1 * Rwi2 * rel_rot_ic;
+    //swap translation and rotation part
+    _jacobianOplus[4].leftCols(3) = J_Tcw2_l.rightCols(3);
+    _jacobianOplus[4].rightCols(3) = J_Tcw2_l.leftCols(3);
 
     // Jacobians wrt Velocity 2
     _jacobianOplus[5].setZero();
-    _jacobianOplus[5].block<3, 3>(3, 0) = Riw1;
+    _jacobianOplus[5].block<3, 3>(3, 0) = Rwi1.transpose();
 }
 
 } // namespace internal

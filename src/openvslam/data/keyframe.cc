@@ -159,6 +159,27 @@ nlohmann::json keyframe::to_json() const {
     return j;
 }
 
+void keyframe::set_velocity(const Vec3_t& v) {
+    std::lock_guard<std::mutex> lock(mtx_velocity_);
+    velocity_ = v;
+    velocity_valid_ = true;
+}
+
+Vec3_t keyframe::get_velocity() const {
+    std::lock_guard<std::mutex> lock(mtx_velocity_);
+    return velocity_;
+}
+
+void keyframe::set_bias(const imu::bias& b) {
+    std::lock_guard<std::mutex> lock(mtx_bias_);
+    imu_bias_ = b;
+}
+
+imu::bias keyframe::get_bias() const {
+    std::lock_guard<std::mutex> lock(mtx_bias_);
+    return imu_bias_;
+}
+
 void keyframe::set_cam_pose(const Mat44_t& cam_pose_cw) {
     std::lock_guard<std::mutex> lock(mtx_pose_);
     cam_pose_cw_ = cam_pose_cw;

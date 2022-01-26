@@ -170,6 +170,7 @@ bool imu_initializer::initialize(const std::vector<data::keyframe*>& keyfrms, Ma
     double angle = atan2((gI.cross(gW)).norm(),gI.dot(gW));
     Rwg = util::converter::exp_so3(rotationAxis*angle);
 
+    std::vector<Vec3_t> velocities(N);
     //compute velocities
     for(int i=0;i<keyfrms_sorted.size()-1;i++)
     {
@@ -191,9 +192,9 @@ bool imu_initializer::initialize(const std::vector<data::keyframe*>& keyfrms, Ma
 
         const Vec3_t delta_position = preintegrated12->get_delta_position_on_bias({{0,0,0},gyr_bias});
 
-        f1->velocity_ = -(0.5 * Rwg*gI * dt * dt +Rwi1*delta_position-scale*(twc2-twc1)+(Rwc2-Rwc1)*imu::config::get_rel_trans_ci())/dt;
+        velocities[i]=-(0.5 * Rwg*gI * dt * dt +Rwi1*delta_position-scale*(twc2-twc1)+(Rwc2-Rwc1)*imu::config::get_rel_trans_ci())/dt;
     }
-    keyfrms_sorted.back()->velocity_ = keyfrms_sorted[keyfrms_sorted.size()-2]->velocity_;
+    velocities.back() = velocities[velocities.size()-2];
 
 //    printf("3. joint optimization\n");
 
@@ -230,12 +231,12 @@ bool imu_initializer::initialize(const std::vector<data::keyframe*>& keyfrms, Ma
             const Mat33_t Rwc1 = Twc1.topLeftCorner<3,3>();
             const Mat33_t Rwi1 = Rwc1*imu::config::get_rel_rot_ci();
             const Vec3_t twc1 = Twc1.topRightCorner<3,1>();
-            const Vec3_t v1 = ref_keyfrm->velocity_;
+            const Vec3_t v1 = velocities[i-1];
 
             const Mat44_t Twc2 = keyfrm->get_cam_pose_inv();
             const Mat33_t Rwc2 = Twc2.topLeftCorner<3,3>();
             const Vec3_t twc2 = Twc2.topRightCorner<3,1>();
-            const Vec3_t v2 = keyfrm->velocity_;
+            const Vec3_t v2 = velocities[i];
 
             const double dt = preintegrated->dt_;
 
@@ -295,7 +296,7 @@ bool imu_initializer::initialize(const std::vector<data::keyframe*>& keyfrms, Ma
             scale = scale*std::exp(increment[0]);
         Rwg = Rwg*util::converter::exp_so3(increment.segment<3>(1));
         for(int i=0;i<keyfrms_sorted.size();i++)
-            keyfrms_sorted[i]->velocity_ += increment.segment<3>(4+3*i);
+            velocities[i] += increment.segment<3>(4+3*i);
         acc_bias += increment.tail<3>();
 
         double rmse = sqrt(error/count);
@@ -306,13 +307,13 @@ bool imu_initializer::initialize(const std::vector<data::keyframe*>& keyfrms, Ma
 
     printf("scale: %.3f\n",scale);
     std::cout<<"gW: "<<(Rwg*gI).transpose()<<std::endl;
-//    for(int i=0;i<keyfrms_sorted.size();i++)
-//        std::cout<<"v"<<i<<" "<<keyfrms_sorted[i]->velocity_.transpose()<<std::endl;
-//    std::cout<<"acc_bias: "<<acc_bias.transpose()<<std::endl;
 
     imu::bias bias(acc_bias,gyr_bias);
-    for(auto keyfrm: keyfrms)
-        keyfrm->imu_bias_ = bias;
+    for(int i=0;i<N;i++)
+    {
+        keyfrms_sorted[i]->set_velocity(velocities[i]);
+        keyfrms_sorted[i]->set_bias(bias);
+    }
 
     return scale>0;
 }

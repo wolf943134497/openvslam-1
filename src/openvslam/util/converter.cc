@@ -104,6 +104,8 @@ Vec3_t converter::log_so3(const Mat33_t& R) {
     }
 }
 
+
+
 Mat33_t converter::inverse_right_jacobian_so3(const Vec3_t& v) {
     const Mat33_t I = Mat33_t::Identity();
     const double d_sq = v.squaredNorm();
@@ -131,6 +133,30 @@ Mat33_t converter::right_jacobian_so3(const Vec3_t& v) {
     else {
         return I - W * (1.0 - std::cos(d)) / d_sq + W * W * (d - std::sin(d)) / (d_sq * d);
     }
+}
+
+Mat44_t converter::inv(const Mat44_t& T) {
+    Mat33_t R = T.topLeftCorner<3,3>();
+    Vec3_t t = T.topRightCorner<3,1>();
+    Mat44_t res = Mat44_t::Identity();
+    res.topLeftCorner<3,3>() = R.transpose();
+    res.topRightCorner<3,1>() = -R.transpose()*t;
+    return res;
+}
+
+Mat66_t converter::adjoint(const Mat44_t& T) {
+    Mat33_t R = T.topLeftCorner<3,3>();
+    Vec3_t t = T.topRightCorner<3,1>();
+    return adjoint(R,t);
+}
+
+Mat66_t converter::adjoint(const Mat33_t& R, const Vec3_t& t) {
+    Mat66_t res;
+    res.topLeftCorner<3,3>() = R;
+    res.bottomRightCorner<3,3>() = R;
+    res.topRightCorner<3,3>() = to_skew_symmetric_mat(t)*R;
+    res.bottomLeftCorner<3,3>().setZero();
+    return res;
 }
 
 } // namespace util

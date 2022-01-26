@@ -179,17 +179,15 @@ void mapping_module::mapping_with_new_keyframe() {
 
     // local bundle adjustment
     abort_local_BA_ = false;
-    if (2 < map_db_->get_num_keyframes()) {
+    if (2 < map_db_->get_num_keyframes())
         local_bundle_adjuster_->optimize(cur_keyfrm_, &abort_local_BA_);
-        if(imu_is_initialized_)
-            local_bundle_adjuster_->optimize_imu(cur_keyfrm_,&abort_local_BA_);
-    }
+
 
     if (imu::config::available() && !imu_is_initialized_ && !reset_is_requested_) {
         initialize_imu();
     }
 
-    local_map_cleaner_->remove_redundant_keyframes(cur_keyfrm_);
+//    local_map_cleaner_->remove_redundant_keyframes(cur_keyfrm_);
 }
 
 void mapping_module::initialize_imu() {

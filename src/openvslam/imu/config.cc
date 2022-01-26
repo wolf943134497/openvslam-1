@@ -16,6 +16,7 @@ void config::fromYaml(const YAML::Node& yaml_node) {
     instance_.ns_gyr_ = yaml_node["ns_gyr"].as<double>();
     instance_.rw_acc_bias_ = yaml_node["rw_acc_bias"].as<double>();
     instance_.rw_gyr_bias_ = yaml_node["rw_gyr_bias"].as<double>();
+    instance_.tightly_coupled_ = yaml_node["tightly_coupled"].as<bool>();
     instance_.update_pose();
     instance_.update_covariance();
 
@@ -31,6 +32,7 @@ void config::fromJson(const nlohmann::json& json_imu) {
     instance_.ns_gyr_ = json_imu.at("ns_gyr").get<double>();
     instance_.rw_acc_bias_ = json_imu.at("rw_acc_bias").get<double>();
     instance_.rw_gyr_bias_ = json_imu.at("rw_gyr_bias").get<double>();
+    instance_.tightly_coupled_ = json_imu.at("tightly_coupled").get<bool>();
     instance_.update_pose();
     instance_.update_covariance();
 

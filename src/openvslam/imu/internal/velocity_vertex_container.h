@@ -85,7 +85,7 @@ inline velocity_vertex_container::velocity_vertex_container(const std::shared_pt
 
 
 inline velocity_vertex* velocity_vertex_container::create_vertex(data::keyframe* keyfrm, const bool is_constant) {
-    return create_vertex(keyfrm->id_, keyfrm->velocity_, is_constant);
+    return create_vertex(keyfrm->id_, keyfrm->get_velocity(), is_constant);
 }
 
 inline velocity_vertex* velocity_vertex_container::create_vertex(const unsigned int id,

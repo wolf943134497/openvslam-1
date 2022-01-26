@@ -82,9 +82,10 @@ void global_bundle_adjuster::optimize(const unsigned int lead_keyfrm_id_in_globa
         }
 
         if (enable_inertial_optimization_ && !use_shared_bias_) {
-            auto acc_bias_vtx = acc_bias_vtx_container.create_vertex(keyfrm->id_, keyfrm->imu_bias_.acc_, false);
+            auto bias = keyfrm->get_bias();
+            auto acc_bias_vtx = acc_bias_vtx_container.create_vertex(keyfrm->id_, bias.acc_, false);
             optimizer.addVertex(acc_bias_vtx);
-            auto gyr_bias_vtx = gyr_bias_vtx_container.create_vertex(keyfrm->id_, keyfrm->imu_bias_.gyr_, false);
+            auto gyr_bias_vtx = gyr_bias_vtx_container.create_vertex(keyfrm->id_, bias.gyr_, false);
             optimizer.addVertex(gyr_bias_vtx);
 
             // Add prior to shared bias
@@ -96,9 +97,10 @@ void global_bundle_adjuster::optimize(const unsigned int lead_keyfrm_id_in_globa
     }
 
     if (enable_inertial_optimization_ && use_shared_bias_) {
-        auto acc_bias_vtx = acc_bias_vtx_container.create_vertex(keyfrms.back()->id_, keyfrms.back()->imu_bias_.acc_, false);
+        auto bias = keyfrms.back()->get_bias();
+        auto acc_bias_vtx = acc_bias_vtx_container.create_vertex(keyfrms.back()->id_, bias.acc_, false);
         optimizer.addVertex(acc_bias_vtx);
-        auto gyr_bias_vtx = gyr_bias_vtx_container.create_vertex(keyfrms.back()->id_, keyfrms.back()->imu_bias_.gyr_, false);
+        auto gyr_bias_vtx = gyr_bias_vtx_container.create_vertex(keyfrms.back()->id_, bias.gyr_, false);
         optimizer.addVertex(gyr_bias_vtx);
 
         // Add prior to shared bias
@@ -268,18 +270,16 @@ void global_bundle_adjuster::optimize(const unsigned int lead_keyfrm_id_in_globa
         if (enable_inertial_optimization_) {
             if (keyfrm->inertial_ref_keyfrm_) {
                 auto velocity_vtx = static_cast<imu::internal::velocity_vertex*>(velocity_vtx_container.get_vertex(keyfrm));
-                keyfrm->velocity_ = velocity_vtx->estimate();
-                keyfrm->velocity_valid_ = true;
+                keyfrm->set_velocity( velocity_vtx->estimate());
                 if (use_shared_bias_) {
                     auto gyr_bias_vtx = static_cast<imu::internal::bias_vertex*>(gyr_bias_vtx_container.get_vertex(keyfrms.back()));
                     auto acc_bias_vtx = static_cast<imu::internal::bias_vertex*>(acc_bias_vtx_container.get_vertex(keyfrms.back()));
-                    keyfrm->imu_bias_ = imu::bias(acc_bias_vtx->estimate(), gyr_bias_vtx->estimate());
+                    keyfrm->set_bias( {acc_bias_vtx->estimate(), gyr_bias_vtx->estimate()});
                 }
                 else {
                     auto gyr_bias_vtx = static_cast<imu::internal::bias_vertex*>(gyr_bias_vtx_container.get_vertex(keyfrm));
                     auto acc_bias_vtx = static_cast<imu::internal::bias_vertex*>(acc_bias_vtx_container.get_vertex(keyfrm));
-                    keyfrm->imu_bias_ = imu::bias(acc_bias_vtx->estimate(), gyr_bias_vtx->estimate());
-                }
+                    keyfrm->set_bias( {acc_bias_vtx->estimate(), gyr_bias_vtx->estimate()});                }
             }
         }
     }

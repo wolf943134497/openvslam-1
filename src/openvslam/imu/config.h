@@ -29,15 +29,21 @@ public:
     inline static bool available(){
         return instance_.available_;
     }
+
+    inline static bool is_tightly_coupled(){
+        return instance_.tightly_coupled_;
+    }
     //---------------------------
     // Setters and Getters
 
     //! Get IMU model name
-    static std::string get_name() ;
+    static std::string get_name();
     //! Get IMU rate [Hz]
-    static double get_rate_hz() ;
+    static double get_rate_hz();
     //! Get IMU rate [s]
-    static double get_rate_dt() ;
+    static double get_rate_dt();
+
+
 
     //! Get IMU's relative pose w.r.t. the camera
     static Mat44_t get_rel_pose_ic() ;
@@ -112,6 +118,8 @@ private:
     double rw_acc_bias_;
     //! random walk of gyroscope sensor bias [rad/s^2/sqrt(Hz)]
     double rw_gyr_bias_;
+    //! whether jointly optimize
+    bool tightly_coupled_;
 };
 
 } // namespace imu

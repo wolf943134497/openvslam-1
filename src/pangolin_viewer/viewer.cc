@@ -10,6 +10,7 @@
 
 #include <opencv2/highgui.hpp>
 
+
 namespace pangolin_viewer {
 
 viewer::viewer(const YAML::Node& yaml_node, openvslam::system* system,

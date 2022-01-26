@@ -326,10 +326,10 @@ void map_database::register_keyframe(camera_database* cam_db, imu::imu_database*
         keyfrm->imu_preintegrator_from_inertial_ref_keyfrm_ = new imu::preintegrator(json_keyfrm.at("imu_preintegrator_from_inertial_ref_keyfrm"));
     }
     if (json_keyfrm.contains("velocity")) {
-        keyfrm->velocity_ = data::convert_json_to_matrix<Vec3_t>(json_keyfrm.at("velocity"));
+        keyfrm->set_velocity( data::convert_json_to_matrix<Vec3_t>(json_keyfrm.at("velocity")));
     }
     if (json_keyfrm.contains("imu_bias")) {
-        keyfrm->imu_bias_ = imu::bias(json_keyfrm.at("imu_bias"));
+        keyfrm->set_bias( imu::bias(json_keyfrm.at("imu_bias")));
     }
 //    if (json_keyfrm.contains("imu_config")) {
 //        keyfrm->imu_config_ = imu_db->get_imu(json_keyfrm.at("imu_config"));

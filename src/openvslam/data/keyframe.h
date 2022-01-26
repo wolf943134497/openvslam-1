@@ -98,7 +98,25 @@ public:
      */
     Mat44_t get_cam_pose_inv() const;
 
+    /**
+     * Set velocity
+     */
+    void set_velocity(const Vec3_t& v);
 
+    /**
+    * get velocity
+    */
+    Vec3_t get_velocity() const;
+
+    /**
+     * Set bias
+     */
+    void set_bias(const imu::bias& b);
+
+    /**
+    * get bias
+    */
+    imu::bias get_bias() const;
 
     /**
      * Get the imu pose
@@ -334,15 +352,20 @@ public:
     //! IMU preintegrator from inertial reference keyframe
     imu::preintegrator* imu_preintegrator_from_inertial_ref_keyfrm_ = nullptr;
 
+    std::atomic<bool> velocity_valid_{false};
+
+private:
+
+    mutable std::mutex mtx_velocity_;
+    mutable std::mutex mtx_bias_;
+
     //! Velocity
     Vec3_t velocity_ = Vec3_t::Zero();
 
-    std::atomic<bool> velocity_valid_{false};
+
 
     //! IMU bias
     imu::bias imu_bias_;
-
-private:
 
 
     //-----------------------------------------

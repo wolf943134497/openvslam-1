@@ -169,8 +169,6 @@ std::shared_ptr<Mat44_t> tracking_module::track_monocular_image(const cv::Mat& i
 
     const auto end = std::chrono::system_clock::now();
     elapsed_ms_ = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-    std::cout<<curr_frm_.id_<<" "<<curr_frm_.get_cam_pose().topRightCorner<3,1>().transpose()<<std::endl;
-    std::cout<<"------------------------"<<std::endl;
     std::shared_ptr<Mat44_t> cam_pose_wc = nullptr;
     if (curr_frm_.cam_pose_cw_is_valid_) {
         cam_pose_wc = std::allocate_shared<Mat44_t>(Eigen::aligned_allocator<Mat44_t>(), curr_frm_.get_cam_pose_inv());
@@ -476,14 +474,14 @@ void tracking_module::predict_from_imu() {
     auto Twi = inertial_ref_keyfrm_->get_imu_pose_inv();
     if(!inertial_ref_keyfrm_->velocity_valid_)
         return;
-    auto v = inertial_ref_keyfrm_->velocity_;
-    auto Twi2 = imu_preintegrator_from_inertial_ref_keyfrm_->predict_pose(Twi,v,inertial_ref_keyfrm_->imu_bias_);
+    auto v = inertial_ref_keyfrm_->get_velocity();
+    auto bias = inertial_ref_keyfrm_->get_bias();
+    auto Twi2 = imu_preintegrator_from_inertial_ref_keyfrm_->predict_pose(Twi,v,bias);
     T_cw_pred_ = imu::config::get_rel_pose_ci()*Twi2.inverse();
     prediction_is_valid_ = true;
-    std::cout<<inertial_ref_keyfrm_->id_<<" "<<inertial_ref_keyfrm_->get_cam_pose().topRightCorner<3,1>().transpose()<<" "<<inertial_ref_keyfrm_->velocity_.transpose()<<std::endl;
-    std::cout<<curr_frm_.id_<<" "<<T_cw_pred_.topRightCorner<3,1>().transpose();
-    std::cout<<" dist2: "<<(T_cw_pred_.topLeftCorner<3,3>().transpose()*T_cw_pred_.topRightCorner<3,1>()
-        +inertial_ref_keyfrm_->get_cam_pose_inv().topRightCorner<3,1>()).norm()<<std::endl;
+    std::cout<<inertial_ref_keyfrm_->id_<<" "<<inertial_ref_keyfrm_->get_cam_pose().topRightCorner<3,1>().transpose()<<" "<<inertial_ref_keyfrm_->get_velocity().transpose()<<std::endl;
+    std::cout<<curr_frm_.id_<<" "<<T_cw_pred_.topRightCorner<3,1>().transpose()<<std::endl;
+
 }
 
 bool tracking_module::initialize() {
@@ -798,7 +796,7 @@ void tracking_module::insert_new_keyframe() {
         new_keyfrm->set_imu_preintegrator(imu_preintegrator_from_inertial_ref_keyfrm_,inertial_ref_keyfrm_);
 
         inertial_ref_keyfrm_ = new_keyfrm;
-        imu_preintegrator_from_inertial_ref_keyfrm_ = new imu::preintegrator(new_keyfrm->imu_bias_);
+        imu_preintegrator_from_inertial_ref_keyfrm_ = new imu::preintegrator(new_keyfrm->get_bias());
     }
 }
 

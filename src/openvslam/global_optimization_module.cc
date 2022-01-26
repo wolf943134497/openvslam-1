@@ -126,10 +126,10 @@ void global_optimization_module::run() {
 }
 
 void global_optimization_module::queue_keyframe(data::keyframe* keyfrm) {
-    std::lock_guard<std::mutex> lock(mtx_keyfrm_queue_);
-    if (keyfrm->id_ != 0) {
-        keyfrms_queue_.push_back(keyfrm);
-    }
+//    std::lock_guard<std::mutex> lock(mtx_keyfrm_queue_);
+//    if (keyfrm->id_ != 0) {
+//        keyfrms_queue_.push_back(keyfrm);
+//    }
 }
 
 bool global_optimization_module::keyframe_is_queued() const {
