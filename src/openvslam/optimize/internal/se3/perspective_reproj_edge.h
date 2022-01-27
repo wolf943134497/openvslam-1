@@ -82,6 +82,7 @@ inline void mono_perspective_reproj_edge::linearizeOplus() {
     const auto x = pos_c(0);
     const auto y = pos_c(1);
     const auto z = pos_c(2);
+
     const auto z_sq = z * z;
 
     const Mat33_t rot_cw = cam_pose_cw.rotation().toRotationMatrix();
@@ -93,7 +94,7 @@ inline void mono_perspective_reproj_edge::linearizeOplus() {
     _jacobianOplusXi(1, 0) = -fy_ * rot_cw(1, 0) / z + fy_ * y * rot_cw(2, 0) / z_sq;
     _jacobianOplusXi(1, 1) = -fy_ * rot_cw(1, 1) / z + fy_ * y * rot_cw(2, 1) / z_sq;
     _jacobianOplusXi(1, 2) = -fy_ * rot_cw(1, 2) / z + fy_ * y * rot_cw(2, 2) / z_sq;
-
+    assert(!_jacobianOplusXi.array().isNaN().any());
     _jacobianOplusXj(0, 0) = x * y / z_sq * fx_;
     _jacobianOplusXj(0, 1) = -(1.0 + (x * x / z_sq)) * fx_;
     _jacobianOplusXj(0, 2) = y / z * fx_;

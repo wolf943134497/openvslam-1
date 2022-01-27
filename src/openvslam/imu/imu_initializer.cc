@@ -170,6 +170,7 @@ bool imu_initializer::initialize(const std::vector<data::keyframe*>& keyfrms, Ma
     double angle = atan2((gI.cross(gW)).norm(),gI.dot(gW));
     Rwg = util::converter::exp_so3(rotationAxis*angle);
 
+    Vec3_t acc_bias;acc_bias.setZero();
     std::vector<Vec3_t> velocities(N);
     //compute velocities
     for(int i=0;i<keyfrms_sorted.size()-1;i++)
@@ -199,7 +200,8 @@ bool imu_initializer::initialize(const std::vector<data::keyframe*>& keyfrms, Ma
 //    printf("3. joint optimization\n");
 
     //GN solve
-    Vec3_t acc_bias;acc_bias.setZero();
+
+    /*
     //scale,gravity,velocities,acc_bias
     int dim = 1 + 3 + 3*N + 3;
     Eigen::MatrixXd H(dim,dim);
@@ -300,11 +302,11 @@ bool imu_initializer::initialize(const std::vector<data::keyframe*>& keyfrms, Ma
         acc_bias += increment.tail<3>();
 
         double rmse = sqrt(error/count);
-//        std::cout<<"iter: "<<iter<<" rmse: "<<rmse<<" inc: "<<increment.norm()<<" scale: "<<scale<<" acc_bias: "<<acc_bias.transpose()<<" gW:"<<(Rwg*gI).transpose()<<std::endl;
+        std::cout<<"iter: "<<iter<<" rmse: "<<rmse<<" inc: "<<increment.norm()<<" scale: "<<scale<<" acc_bias: "<<acc_bias.transpose()<<" gW:"<<(Rwg*gI).transpose()<<std::endl;
         if(increment.norm()<1e-6)
             break;
     }
-
+*/
     printf("scale: %.3f\n",scale);
     std::cout<<"gW: "<<(Rwg*gI).transpose()<<std::endl;
 

@@ -23,13 +23,6 @@ public:
 
     virtual ~inertial_edge_wrapper() = default;
 
-    bool is_inlier() const;
-
-    bool is_outlier() const;
-
-    void set_as_inlier() const;
-
-    void set_as_outlier() const;
 
     g2o::OptimizableGraph::Edge* edge_;
 };
@@ -56,27 +49,11 @@ inline inertial_edge_wrapper::inertial_edge_wrapper(const std::shared_ptr<preint
 
 
     // loss functionを設定
-    if (use_huber_loss) {
-        auto huber_kernel = new g2o::RobustKernelHuber();
-        huber_kernel->setDelta(sqrt_chi_sq);
-        edge_->setRobustKernel(huber_kernel);
-    }
-}
-
-inline bool inertial_edge_wrapper::is_inlier() const {
-    return edge_->level() == 0;
-}
-
-inline bool inertial_edge_wrapper::is_outlier() const {
-    return edge_->level() != 0;
-}
-
-inline void inertial_edge_wrapper::set_as_inlier() const {
-    edge_->setLevel(0);
-}
-
-inline void inertial_edge_wrapper::set_as_outlier() const {
-    edge_->setLevel(1);
+//    if (use_huber_loss) {
+//        auto huber_kernel = new g2o::RobustKernelHuber();
+//        huber_kernel->setDelta(sqrt_chi_sq);
+//        edge_->setRobustKernel(huber_kernel);
+//    }
 }
 
 } // namespace internal

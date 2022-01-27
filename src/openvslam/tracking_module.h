@@ -137,8 +137,10 @@ public:
 
     //! current pose predicted from IMU
     Mat44_t T_cw_pred_;
+    //! current velocity predicted from imu
+    Vec3_t velocity_;
     //! prediction is valid or not
-    bool prediction_is_valid_ = false;
+    bool imu_prediction_is_valid_ = false;
 
     //! depth threshold (Ignore depths farther than true_depth_thr_ times the baseline.)
     double true_depth_thr_ = 40.0;

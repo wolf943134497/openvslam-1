@@ -44,7 +44,7 @@ void mono_tracking(const std::shared_ptr<openvslam::config>& cfg,
     // startup the SLAM process
     SLAM.startup();
 
-    if (cfg->imu_config_) {
+    if (cfg->useIMU) {
         // feed all IMU data
         auto imu_data = sequence.get_imu_data();
         while (!imu_data.empty()) {
@@ -175,7 +175,7 @@ void stereo_tracking(const std::shared_ptr<openvslam::config>& cfg,
     // startup the SLAM process
     SLAM.startup();
 
-    if (cfg->imu_config_) {
+    if (cfg->useIMU) {
         // feed all IMU data
         auto imu_data = sequence.get_imu_data();
         while (!imu_data.empty()) {

@@ -34,7 +34,7 @@ TEST(data, reintegrate_zero) {
     // gyr bias random walk [(rad/s^2]/sqrt(Hz)]
     const double rw_gyr_bias = 1.9393e-05;
 
-    const auto cfg = eigen_alloc_shared<imu::config>(name, rate_hz, rel_pose_ic, ns_acc, ns_gyr, rw_acc_bias, rw_gyr_bias);
+    imu::config::fromPara(name, rate_hz, rel_pose_ic, ns_acc, ns_gyr, rw_acc_bias, rw_gyr_bias);
 
     imu::preintegrator p(imu::bias(), cfg);
 
@@ -47,7 +47,7 @@ TEST(data, reintegrate_zero) {
     EXPECT_EQ((p.preintegrated_->delta_position_).cwiseAbs().sum(), 0);
 }
 
-std::shared_ptr<imu::config> get_imu_config() {
+void get_imu_config() {
     // basic information
     const std::string name = "IMU";
 
@@ -69,7 +69,7 @@ std::shared_ptr<imu::config> get_imu_config() {
     // gyr bias random walk [(rad/s^2]/sqrt(Hz)]
     const double rw_gyr_bias = 1.9393e-05;
 
-    return eigen_alloc_shared<imu::config>(name, rate_hz, rel_pose_ic, ns_acc, ns_gyr, rw_acc_bias, rw_gyr_bias);
+    imu::config::fromPara(name, rate_hz, rel_pose_ic, ns_acc, ns_gyr, rw_acc_bias, rw_gyr_bias);
 }
 
 void show_preintegrated(const imu::preintegrated& preintegrated) {

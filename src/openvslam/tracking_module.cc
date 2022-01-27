@@ -287,7 +287,9 @@ void tracking_module::reset() {
     last_reloc_frm_id_ = 0;
     if(imu_preintegrator_from_inertial_ref_keyfrm_)
         delete imu_preintegrator_from_inertial_ref_keyfrm_;
+
     imu_preintegrator_from_inertial_ref_keyfrm_ = nullptr;
+    imu_is_initialized_ = false;
 
     tracking_state_ = tracker_state_t::NotInitialized;
 }
@@ -470,18 +472,18 @@ void tracking_module::track() {
 }
 
 void tracking_module::predict_from_imu() {
-    prediction_is_valid_ = false;
+    imu_prediction_is_valid_ = false;
     auto Twi = inertial_ref_keyfrm_->get_imu_pose_inv();
     if(!inertial_ref_keyfrm_->velocity_valid_)
         return;
     auto v = inertial_ref_keyfrm_->get_velocity();
     auto bias = inertial_ref_keyfrm_->get_bias();
     auto Twi2 = imu_preintegrator_from_inertial_ref_keyfrm_->predict_pose(Twi,v,bias);
-    T_cw_pred_ = imu::config::get_rel_pose_ci()*Twi2.inverse();
-    prediction_is_valid_ = true;
-    std::cout<<inertial_ref_keyfrm_->id_<<" "<<inertial_ref_keyfrm_->get_cam_pose().topRightCorner<3,1>().transpose()<<" "<<inertial_ref_keyfrm_->get_velocity().transpose()<<std::endl;
-    std::cout<<curr_frm_.id_<<" "<<T_cw_pred_.topRightCorner<3,1>().transpose()<<std::endl;
+    T_cw_pred_ = imu::config::get_rel_pose_ci()*util::converter::inv(Twi2);
+    velocity_ = imu_preintegrator_from_inertial_ref_keyfrm_->
+        predict_velo(Twi,v,bias);
 
+    imu_prediction_is_valid_ = true;
 }
 
 bool tracking_module::initialize() {
@@ -520,9 +522,9 @@ bool tracking_module::track_current_frame() {
 
     if (tracking_state_ == tracker_state_t::Tracking) {
         // Tracking mode
-//        if(prediction_is_valid_){
-//            succeeded = frame_tracker_.predition_based_track(curr_frm_,last_frm_,T_cw_pred_);
-//        }
+        if(imu_prediction_is_valid_){
+            succeeded = frame_tracker_.predition_based_track(curr_frm_,last_frm_,T_cw_pred_);
+        }
         if (!succeeded && twist_is_valid_ && last_reloc_frm_id_ + 2 < curr_frm_.id_) {
             // if the motion model is valid
             succeeded = frame_tracker_.motion_based_track(curr_frm_, last_frm_, twist_);
@@ -623,7 +625,10 @@ bool tracking_module::optimize_current_frame_with_local_map() {
     search_local_landmarks();
 
     // optimize the pose
-    pose_optimizer_.optimize(curr_frm_);
+    if(imu_prediction_is_valid_ && imu::config::is_tightly_coupled())
+        pose_optimizer_.optimize(curr_frm_,inertial_ref_keyfrm_,imu_preintegrator_from_inertial_ref_keyfrm_);
+    else
+        pose_optimizer_.optimize(curr_frm_);
 
     // count up the number of tracked landmarks
     num_tracked_lms_ = 0;
@@ -769,6 +774,9 @@ bool tracking_module::new_keyframe_is_needed() const {
     if (!mapping_is_enabled_) {
         return false;
     }
+
+    if(imu::config::available() && curr_frm_.timestamp_-inertial_ref_keyfrm_->timestamp_>0.5)
+        return true;
 
     // cannnot insert the new keyframe in a second after relocalization
     const auto num_keyfrms = map_db_->get_num_keyframes();

@@ -21,6 +21,7 @@
 #include <g2o/solvers/eigen/linear_solver_eigen.h>
 #include <g2o/solvers/csparse/linear_solver_csparse.h>
 #include <g2o/core/optimization_algorithm_levenberg.h>
+#include <g2o/core/optimization_algorithm_gauss_newton.h>
 
 namespace openvslam {
 namespace optimize {
@@ -38,6 +39,7 @@ void global_bundle_adjuster::optimize(const unsigned int lead_keyfrm_id_in_globa
     // 2. Construct an optimizer
 
     std::unique_ptr<g2o::Solver> block_solver;
+    g2o::OptimizationAlgorithmWithHessian* algorithm;
     if (enable_inertial_optimization_) {
         auto linear_solver = g2o::make_unique<g2o::LinearSolverCSparse<g2o::BlockSolverX::PoseMatrixType>>();
         block_solver = g2o::make_unique<g2o::BlockSolverX>(std::move(linear_solver));
@@ -46,7 +48,7 @@ void global_bundle_adjuster::optimize(const unsigned int lead_keyfrm_id_in_globa
         auto linear_solver = g2o::make_unique<g2o::LinearSolverCSparse<g2o::BlockSolver_6_3::PoseMatrixType>>();
         block_solver = g2o::make_unique<g2o::BlockSolver_6_3>(std::move(linear_solver));
     }
-    auto algorithm = new g2o::OptimizationAlgorithmLevenberg(std::move(block_solver));
+    algorithm = new g2o::OptimizationAlgorithmLevenberg(std::move(block_solver));
 
     g2o::SparseOptimizer optimizer;
     optimizer.setAlgorithm(algorithm);
@@ -55,6 +57,8 @@ void global_bundle_adjuster::optimize(const unsigned int lead_keyfrm_id_in_globa
         optimizer.setForceStopFlag(force_stop_flag);
     }
 
+    int n_inertial_vertices = 0;
+    int n_visual_vertices = 0;
     // 3. Convert each of the keyframe to the g2o vertex, then set it to the optimizer
 
     // Container of the shot vertices
@@ -73,7 +77,7 @@ void global_bundle_adjuster::optimize(const unsigned int lead_keyfrm_id_in_globa
             continue;
         }
 
-        auto keyfrm_vtx = keyfrm_vtx_container.create_vertex(keyfrm, keyfrm->id_ == 0);
+        auto keyfrm_vtx = keyfrm_vtx_container.create_vertex(keyfrm, false);
         optimizer.addVertex(keyfrm_vtx);
 
         if (enable_inertial_optimization_) {
@@ -93,6 +97,7 @@ void global_bundle_adjuster::optimize(const unsigned int lead_keyfrm_id_in_globa
             optimizer.addEdge(pba_edge_wrap.edge_);
             imu::internal::prior_bias_edge_wrapper pbg_edge_wrap(info_prior_gyr, gyr_bias_vtx);
             optimizer.addEdge(pbg_edge_wrap.edge_);
+            n_inertial_vertices ++;
         }
     }
 
@@ -103,11 +108,13 @@ void global_bundle_adjuster::optimize(const unsigned int lead_keyfrm_id_in_globa
         auto gyr_bias_vtx = gyr_bias_vtx_container.create_vertex(keyfrms.back()->id_, bias.gyr_, false);
         optimizer.addVertex(gyr_bias_vtx);
 
+
         // Add prior to shared bias
         imu::internal::prior_bias_edge_wrapper pba_edge_wrap(info_prior_acc, acc_bias_vtx);
         optimizer.addEdge(pba_edge_wrap.edge_);
         imu::internal::prior_bias_edge_wrapper pbg_edge_wrap(info_prior_gyr, gyr_bias_vtx);
         optimizer.addEdge(pbg_edge_wrap.edge_);
+        n_inertial_vertices +=2;
     }
 
     // 4.1 Connect the vertices of the keyframe and the imu data
@@ -159,6 +166,7 @@ void global_bundle_adjuster::optimize(const unsigned int lead_keyfrm_id_in_globa
                                                                     sqrt_chi_sq, use_huber_kernel_inertial);
 
             optimizer.addEdge(inertial_edge_wrap.edge_);
+            n_inertial_vertices ++;
 
             if (!use_shared_bias_) {
                 imu::internal::bias_edge_wrapper acc_bias_edge_wrap(keyfrm->imu_preintegrator_from_inertial_ref_keyfrm_->preintegrated_,
@@ -170,6 +178,7 @@ void global_bundle_adjuster::optimize(const unsigned int lead_keyfrm_id_in_globa
                                                                gyr_bias_vtx1,gyr_bias_vtx2,
                                                                sqrt_chi_sq, use_huber_kernel_inertial);
                 optimizer.addEdge(gyr_bias_edge_wrap.edge_);
+                n_inertial_vertices += 2;
             }
         }
     }
@@ -232,6 +241,7 @@ void global_bundle_adjuster::optimize(const unsigned int lead_keyfrm_id_in_globa
                                                         inv_sigma_sq, sqrt_chi_sq, use_huber_kernel_);
             reproj_edge_wraps.push_back(reproj_edge_wrap);
             optimizer.addEdge(reproj_edge_wrap.edge_);
+            n_visual_vertices ++;
             ++num_edges;
         }
 
@@ -240,6 +250,12 @@ void global_bundle_adjuster::optimize(const unsigned int lead_keyfrm_id_in_globa
             is_optimized_lm.at(i) = false;
         }
     }
+
+    std::cout<<"num keyframes: "<<keyfrms.size()<<std::endl;
+    std::cout<<"num landmarks: "<<lms.size()<<std::endl;
+    std::cout<<"n inertial vertices: "<<n_inertial_vertices<<std::endl;
+    std::cout<<"n visual vertices: "<<n_visual_vertices<<std::endl;
+
 
     // 5. Perform optimization
 
@@ -309,6 +325,7 @@ void global_bundle_adjuster::optimize(const unsigned int lead_keyfrm_id_in_globa
             lm->loop_BA_identifier_ = lead_keyfrm_id_in_global_BA;
         }
     }
+
 }
 
 void global_bundle_adjuster::enable_inertial_optimization(bool enabled, bool use_shared_bias) {

@@ -49,6 +49,8 @@ inline void landmark_vertex::setToOriginImpl() {
 
 inline void landmark_vertex::oplusImpl(const double* update) {
     Eigen::Map<const Vec3_t> v(update);
+    assert(!v.array().isNaN().any());
+    assert(!v.array().isInf().any());
     _estimate += v;
 }
 

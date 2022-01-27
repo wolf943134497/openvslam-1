@@ -5,7 +5,12 @@ namespace openvslam {
 
 namespace data {
 class frame;
+class keyframe;
 }
+namespace imu{
+class preintegrator;
+}
+
 
 namespace optimize {
 
@@ -28,7 +33,9 @@ public:
      * @param frm
      * @return
      */
-    unsigned int optimize(data::frame& frm) const;
+    unsigned int optimize(data::frame& frm,
+                          data::keyframe* ref_kfm = nullptr,
+                          imu::preintegrator* preint= nullptr) const;
 
 private:
     //! robust optimizationの試行回数

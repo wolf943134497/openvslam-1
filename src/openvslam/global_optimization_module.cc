@@ -427,6 +427,7 @@ void global_optimization_module::reset() {
     keyfrms_queue_.clear();
     loop_detector_->set_loop_correct_keyframe_id(0);
     reset_is_requested_ = false;
+
 }
 
 void global_optimization_module::request_pause() {

@@ -26,6 +26,8 @@
 #include <g2o/solvers/dense/linear_solver_dense.h>
 #include <g2o/solvers/csparse/linear_solver_csparse.h>
 #include <g2o/core/optimization_algorithm_levenberg.h>
+#include "g2o/core/optimization_algorithm_dogleg.h"
+#include "g2o/core/optimization_algorithm_gauss_newton.h"
 
 namespace openvslam {
 namespace optimize {
@@ -110,7 +112,7 @@ void local_bundle_adjuster::optimize(openvslam::data::keyframe* curr_keyfrm, boo
 
     // 2. Construct an optimizer
 
-    std::unique_ptr<g2o::Solver> block_solver;
+    std::unique_ptr<g2o::BlockSolverBase> block_solver;
     if (enable_inertial_optimization_ && imu::config::is_tightly_coupled()) {
         auto linear_solver = g2o::make_unique<g2o::LinearSolverCSparse<g2o::BlockSolverX::PoseMatrixType>>();
         block_solver = g2o::make_unique<g2o::BlockSolverX>(std::move(linear_solver));
@@ -120,10 +122,9 @@ void local_bundle_adjuster::optimize(openvslam::data::keyframe* curr_keyfrm, boo
         block_solver = g2o::make_unique<g2o::BlockSolver_6_3>(std::move(linear_solver));
     }
     auto algorithm = new g2o::OptimizationAlgorithmLevenberg(std::move(block_solver));
-
     g2o::SparseOptimizer optimizer;
     optimizer.setAlgorithm(algorithm);
-
+    int n_fixed_vertices = 0;
 
     if (force_stop_flag) {
         optimizer.setForceStopFlag(force_stop_flag);
@@ -144,16 +145,18 @@ void local_bundle_adjuster::optimize(openvslam::data::keyframe* curr_keyfrm, boo
       for (auto& id_keyfrm_pair : kfrms) {
           auto keyfrm = id_keyfrm_pair.second;
 
-          auto keyfrm_vtx = keyfrm_vtx_container.create_vertex(keyfrm, fixed || keyfrm->id_ == 0);
+          auto keyfrm_vtx = keyfrm_vtx_container.create_vertex(keyfrm, fixed);
+
           optimizer.addVertex(keyfrm_vtx);
+          n_fixed_vertices += keyfrm_vtx->fixed();
           if(enable_inertial_optimization_ && imu::config::is_tightly_coupled())
           {
-              auto velocity_vtx = velocity_vtx_container.create_vertex(keyfrm, false);
+              auto velocity_vtx = velocity_vtx_container.create_vertex(keyfrm, fixed);
               optimizer.addVertex(velocity_vtx);
               auto bias = keyfrm->get_bias();
-              auto acc_bias_vtx = acc_bias_vtx_container.create_vertex(keyfrm->id_, bias.acc_, false);
+              auto acc_bias_vtx = acc_bias_vtx_container.create_vertex(keyfrm->id_, bias.acc_, fixed);
               optimizer.addVertex(acc_bias_vtx);
-              auto gyr_bias_vtx = gyr_bias_vtx_container.create_vertex(keyfrm->id_, bias.gyr_, false);
+              auto gyr_bias_vtx = gyr_bias_vtx_container.create_vertex(keyfrm->id_, bias.gyr_, fixed);
               optimizer.addVertex(gyr_bias_vtx);
           }
       }
@@ -269,6 +272,20 @@ void local_bundle_adjuster::optimize(openvslam::data::keyframe* curr_keyfrm, boo
             return;
         }
     }
+//    if(!enable_inertial_optimization_ && n_fixed_vertices<2)
+//    {
+//        //set the two vertices with smallest id as fixed
+//        //to avoid scale drift
+//        std::vector<unsigned int > ids;
+//        for(auto iter = keyfrm_vtx_container.begin();iter!=keyfrm_vtx_container.end();iter++)
+//        {
+//            ids.push_back(iter->first);
+//        }
+//        std::sort(ids.begin(),ids.end());
+//        keyfrm_vtx_container.get_vertex(ids[0])->setFixed(true);
+//        keyfrm_vtx_container.get_vertex(ids[1])->setFixed(true);
+//    }
+
 
     optimizer.initializeOptimization();
     optimizer.optimize(num_first_iter_);
@@ -355,11 +372,6 @@ void local_bundle_adjuster::optimize(openvslam::data::keyframe* curr_keyfrm, boo
             {
                 auto velocity_vtx = velocity_vtx_container.get_vertex(local_keyfrm);
                 local_keyfrm->set_velocity(velocity_vtx->estimate());
-                if(local_keyfrm->inertial_ref_keyfrm_)
-                    std::cout<<"kfr id: "<<local_keyfrm->id_<<" ref kfm id:"<<local_keyfrm->inertial_ref_keyfrm_->id_<<" velocity: "<<velocity_vtx->estimate().transpose()<<std::endl;
-                else
-                    std::cout<<"kfr id: "<<local_keyfrm->id_<<" velocity: "<<velocity_vtx->estimate().transpose()<<std::endl;
-
                 auto acc_bias_vtx = acc_bias_vtx_container.get_vertex(local_keyfrm);
                 auto gyr_bias_vtx = gyr_bias_vtx_container.get_vertex(local_keyfrm);
                 local_keyfrm->set_bias({acc_bias_vtx->estimate(),gyr_bias_vtx->estimate()});

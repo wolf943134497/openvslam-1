@@ -261,7 +261,7 @@ std::shared_ptr<Mat44_t> system::feed_monocular_frame(const cv::Mat& img, const 
 //        if(tracker_->curr_frm_.is_keyframe_)
 //            map_publisher_->clear_cam_poses();
     }
-    if(tracker_->prediction_is_valid_)
+    if(tracker_->imu_prediction_is_valid_)
     {
         map_publisher_->add_cam_pose_predicts(tracker_->T_cw_pred_);
         if(tracker_->curr_frm_.is_keyframe_)
@@ -309,7 +309,7 @@ void system::feed_IMU_data(const std::shared_ptr<imu::data>& imu_data) {
 }
 
 bool system::relocalize_by_pose(const Mat44_t& cam_pose_wc) {
-    const Mat44_t cam_pose_cw = cam_pose_wc.inverse();
+    const Mat44_t cam_pose_cw = util::converter::inv(cam_pose_wc);
     bool status = tracker_->request_relocalize_by_pose(cam_pose_cw);
     if (status) {
         // Even if state will be lost, still update the pose in map_publisher_
@@ -321,7 +321,7 @@ bool system::relocalize_by_pose(const Mat44_t& cam_pose_wc) {
 }
 
 bool system::relocalize_by_pose_2d(const Mat44_t& cam_pose_wc, const Vec3_t& normal_vector) {
-    const Mat44_t cam_pose_cw = cam_pose_wc.inverse();
+    const Mat44_t cam_pose_cw = util::converter::inv(cam_pose_wc);
     bool status = tracker_->request_relocalize_by_pose_2d(cam_pose_cw, normal_vector);
     if (status) {
         // Even if state will be lost, still update the pose in map_publisher_

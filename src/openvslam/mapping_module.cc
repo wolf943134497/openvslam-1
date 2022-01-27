@@ -187,7 +187,7 @@ void mapping_module::mapping_with_new_keyframe() {
         initialize_imu();
     }
 
-//    local_map_cleaner_->remove_redundant_keyframes(cur_keyfrm_);
+    local_map_cleaner_->remove_redundant_keyframes(cur_keyfrm_);
 }
 
 void mapping_module::initialize_imu() {
@@ -216,10 +216,9 @@ void mapping_module::initialize_imu() {
 
     map_db_->apply_scale_and_gravity_direction(Rwg, scale);
 
-
     const bool use_huber_kernel = true;
     const bool use_shared_bias = true;
-    optimize::global_bundle_adjuster global_bundle_adjuster(map_db_, 100, use_huber_kernel);
+    optimize::global_bundle_adjuster global_bundle_adjuster(map_db_, 10, use_huber_kernel);
     global_bundle_adjuster.enable_inertial_optimization(true, use_shared_bias);
     global_bundle_adjuster.optimize(0, nullptr, info_prior_acc, 0);
 
@@ -508,6 +507,7 @@ void mapping_module::reset() {
     local_map_cleaner_->reset();
     reset_is_requested_ = false;
     imu_is_initialized_ = false;
+    local_bundle_adjuster_->set_enable_inertial_optimization(false);
 }
 
 void mapping_module::request_pause() {

@@ -43,6 +43,12 @@ IMU:
   rw_gyr_bias: 1.9393e-05
   rw_acc_bias: 3.0000e-03
 
+  #if set true, imu and camera errors are jointly optimized as
+  #state of the art work does
+  #otherwise imu supplies initial camera pose in tracking and
+  #vslam result corrects imu errors
+  tightly_coupled: true
+
 #================#
 # ORB Parameters #
 #================#
