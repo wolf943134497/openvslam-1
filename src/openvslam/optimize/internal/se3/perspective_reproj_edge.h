@@ -225,6 +225,8 @@ inline void stereo_perspective_reproj_edge::linearizeOplus() {
     _jacobianOplusXj(2, 3) = _jacobianOplusXj(0, 3);
     _jacobianOplusXj(2, 4) = 0;
     _jacobianOplusXj(2, 5) = _jacobianOplusXj(0, 5) - focal_x_baseline_ / z_sq;
+    assert(!_jacobianOplusXi.array().isNaN().any());
+    assert(!_jacobianOplusXj.array().isNaN().any());
 }
 
 inline bool stereo_perspective_reproj_edge::depth_is_positive() const {

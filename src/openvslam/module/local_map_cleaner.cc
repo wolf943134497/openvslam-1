@@ -2,6 +2,8 @@
 #include "openvslam/data/landmark.h"
 #include "openvslam/module/local_map_cleaner.h"
 
+#include "spdlog/spdlog.h"
+
 namespace openvslam {
 namespace module {
 
@@ -59,6 +61,8 @@ unsigned int local_map_cleaner::remove_redundant_landmarks(const unsigned int cu
             ++num_removed;
             lm->prepare_for_erasing();
             iter = fresh_landmarks_.erase(iter);
+//            delete lm;
+//            lm = nullptr;
         }
         else {
             // hold decision because the state is NotClear
@@ -77,7 +81,7 @@ unsigned int local_map_cleaner::remove_redundant_keyframes(data::keyframe* cur_k
     unsigned int num_removed = 0;
     // check redundancy for each of the covisibilities
     const auto cur_covisibilities = cur_keyfrm->graph_node_->get_covisibilities();
-    for (const auto covisibility : cur_covisibilities) {
+    for (auto covisibility : cur_covisibilities) {
         // cannot remove the origin
         if (covisibility->id_ == origin_keyfrm_id_) {
             continue;
@@ -98,6 +102,9 @@ unsigned int local_map_cleaner::remove_redundant_keyframes(data::keyframe* cur_k
         if (redundant_obs_ratio_thr_ <= static_cast<float>(num_redundant_obs) / num_valid_obs) {
             ++num_removed;
             covisibility->prepare_for_erasing();
+            spdlog::debug("removed keyframe {}",covisibility->id_);
+            delete covisibility;
+            covisibility = nullptr;
         }
     }
 

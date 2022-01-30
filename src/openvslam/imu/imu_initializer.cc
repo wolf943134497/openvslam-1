@@ -201,7 +201,7 @@ bool imu_initializer::initialize(const std::vector<data::keyframe*>& keyfrms, Ma
 
     //GN solve
 
-    /*
+
     //scale,gravity,velocities,acc_bias
     int dim = 1 + 3 + 3*N + 3;
     Eigen::MatrixXd H(dim,dim);
@@ -306,7 +306,7 @@ bool imu_initializer::initialize(const std::vector<data::keyframe*>& keyfrms, Ma
         if(increment.norm()<1e-6)
             break;
     }
-*/
+
     printf("scale: %.3f\n",scale);
     std::cout<<"gW: "<<(Rwg*gI).transpose()<<std::endl;
 

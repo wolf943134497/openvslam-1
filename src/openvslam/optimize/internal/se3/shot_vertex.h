@@ -24,6 +24,7 @@ public:
     void setToOriginImpl() override;
 
     void oplusImpl(const number_t* update_) override;
+
 };
 
 inline shot_vertex::shot_vertex()

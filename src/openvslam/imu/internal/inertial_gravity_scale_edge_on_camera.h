@@ -140,8 +140,8 @@ inline void inertial_gravity_scale_edge_on_camera::computeError() {
 
     // The reference is "Inertial-Only Optimization for Visual-Inertial Initialization"
     const Vec3_t error_rotation = util::converter::log_so3(delta_rotation.transpose() * Riw1 * Rwi2);        // (7)
-    const Vec3_t error_velocity = Riw1 * (s * (v2 - v1) - g * dt) - delta_velocity;                          // (8)
-    const Vec3_t error_position = Riw1 * (s * (twi2 - twi1 - v1 * dt) - 0.5 * g * dt * dt) - delta_position; // (9)
+    const Vec3_t error_velocity = Riw1 * (v2 - v1 - g * dt) - delta_velocity;                          // (8)
+    const Vec3_t error_position = Riw1 * (s * (twi2 - twi1) - v1 * dt - 0.5 * g * dt * dt) - delta_position; // (9)
 
     _error << error_rotation, error_velocity, error_position;
 }

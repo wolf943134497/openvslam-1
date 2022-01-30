@@ -213,12 +213,13 @@ void mapping_module::initialize_imu() {
         return;
     }
 
-
+    std::unique_lock<std::mutex> lock(data::map_database::mtx_database_);
     map_db_->apply_scale_and_gravity_direction(Rwg, scale);
+    lock.unlock();
 
     const bool use_huber_kernel = true;
-    const bool use_shared_bias = true;
-    optimize::global_bundle_adjuster global_bundle_adjuster(map_db_, 10, use_huber_kernel);
+    const bool use_shared_bias = false;
+    optimize::global_bundle_adjuster global_bundle_adjuster(map_db_, 30, use_huber_kernel);
     global_bundle_adjuster.enable_inertial_optimization(true, use_shared_bias);
     global_bundle_adjuster.optimize(0, nullptr, info_prior_acc, 0);
 

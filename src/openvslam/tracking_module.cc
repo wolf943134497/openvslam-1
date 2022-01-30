@@ -224,7 +224,8 @@ std::shared_ptr<Mat44_t> tracking_module::track_RGBD_image(const cv::Mat& img, c
     return cam_pose_wc;
 }
 
-void tracking_module::queue_IMU_data(const std::shared_ptr<imu::data>& imu_data) {
+void tracking_module::queue_IMU_data(std::shared_ptr<imu::data> imu_data) {
+    std::unique_lock<std::mutex> lg(mtx_imu_);
     imu_data_deque_.push_back(imu_data);
 }
 
@@ -294,71 +295,65 @@ void tracking_module::reset() {
     tracking_state_ = tracker_state_t::NotInitialized;
 }
 
-void tracking_module::cleanup_old_imu_data() {
-    if (imu_data_deque_.size() < 2) {
-        spdlog::warn("not enough imu data: {}", imu_data_deque_.size());
-        return;
+bool tracking_module::preintegrate_imu() {
+    std::unique_lock<std::mutex> lg(mtx_imu_);
+    if(imu_data_deque_.front()->ts_>curr_frm_.timestamp_)
+    {
+        spdlog::info("skip image ahead of first imu");
+        return false;
     }
-    while (imu_data_deque_[1]->ts_ < last_frm_.timestamp_ + 1e-6) {
+    while(imu_data_deque_.back()->ts_<curr_frm_.timestamp_)
+    {
+        spdlog::info("waiting for imu. curr img time {}, latest imu time{}",
+                     std::to_string(curr_frm_.timestamp_),
+                     std::to_string(imu_data_deque_.back()->ts_));
+        lg.unlock();
+        usleep(1e6);
+        lg.lock();
+    }
+
+    std::vector<std::shared_ptr<imu::data>> imus;
+    while(imu_data_deque_.front()->ts_<curr_frm_.timestamp_)
+    {
+        imus.push_back(imu_data_deque_.front());
         imu_data_deque_.pop_front();
     }
-    if (imu_data_deque_.front()->ts_ > last_frm_.timestamp_ + 1e-6) {
-        spdlog::warn("not enough imu data (stamp): {} {}", imu_data_deque_.front()->ts_, last_frm_.timestamp_);
-        return;
-    }
-}
 
-unsigned int tracking_module::get_last_imu_index() const {
-    unsigned int n = 0;
-    for (unsigned int i = 0; i < imu_data_deque_.size(); ++i) {
-        if (imu_data_deque_[i]->ts_ > curr_frm_.timestamp_ - 1e-6) {
-            n = i + 1;
-            break;
-        }
-    }
-    return n;
-}
+    assert(imus.back()->ts_<curr_frm_.timestamp_ &&
+           imu_data_deque_.front()->ts_>curr_frm_.timestamp_);
+    double ratio = (curr_frm_.timestamp_-imus.back()->ts_)/(imu_data_deque_.front()->ts_-imus.back()->ts_);
+    auto interpolated_imu = std::make_shared<imu::data>((1-ratio)*imus.back()->acc_+ratio*imu_data_deque_.front()->acc_,
+                                                        (1-ratio)*imus.back()->gyr_+ratio*imu_data_deque_.front()->gyr_,
+                                                        curr_frm_.timestamp_);
+    imus.push_back(interpolated_imu);
+    imu_data_deque_.push_front(interpolated_imu);
 
-void tracking_module::preintegrate_imu() {
-    cleanup_old_imu_data();
-    unsigned int n = get_last_imu_index();
-    if (n < 2) {
-        spdlog::warn("not enough imu data in range: {}", n);
-        return;
+    lg.unlock();
+
+
+    for(int i=0;i<imus.size()-1;i++)
+    {
+        if(imu_preintegrator_from_inertial_ref_keyfrm_)
+            imu_preintegrator_from_inertial_ref_keyfrm_->
+                integrate_new_measurement(imus[i]->acc_,
+                                          imus[i]->gyr_,
+                                          imus[i+1]->ts_-imus[i]->ts_);
     }
 
-    if(imu_preintegrator_from_last_frm)
-        delete imu_preintegrator_from_last_frm;
-    imu_preintegrator_from_last_frm = new imu::preintegrator(imu::bias());
-
-    for (unsigned int i = 0; i < n - 1; i++) {
-        double dt;
-        Vec3_t acc, gyr;
-
-        if (i == 0 && std::abs(last_frm_.timestamp_ - imu_data_deque_[i]->ts_) > 1e-6) {
-            imu::imu_util::preprocess_imu_interpolate1(*imu_data_deque_[i], *imu_data_deque_[i + 1],
-                                                       last_frm_.timestamp_, acc, gyr, dt);
-        }
-        else if (i == n - 2 && std::abs(curr_frm_.timestamp_ - imu_data_deque_[i + 1]->ts_) > 1e-6) {
-            imu::imu_util::preprocess_imu_interpolate2(*imu_data_deque_[i], *imu_data_deque_[i + 1],
-                                                       curr_frm_.timestamp_, acc, gyr, dt);
-        }
-        else {
-            imu::imu_util::preprocess_imu(*imu_data_deque_[i], *imu_data_deque_[i + 1],
-                                          acc, gyr, dt);
-        }
-
-        imu_preintegrator_from_inertial_ref_keyfrm_->integrate_new_measurement(acc, gyr, dt);
-        imu_preintegrator_from_last_frm->integrate_new_measurement(acc,gyr,dt);
-    }
+    return true;
 }
 
 void tracking_module::track() {
+    if (imu::config::available()) {
+        if(!preintegrate_imu())
+        {
+            // update last frame
+            last_frm_ = curr_frm_;
+            return;
+        }
+    }
     if (tracking_state_ == tracker_state_t::NotInitialized) {
         tracking_state_ = tracker_state_t::Initializing;
-    }
-    else if (imu::config::available()) {
-        preintegrate_imu();
     }
 
     last_tracking_state_ = tracking_state_;
@@ -480,6 +475,9 @@ void tracking_module::predict_from_imu() {
     auto bias = inertial_ref_keyfrm_->get_bias();
     auto Twi2 = imu_preintegrator_from_inertial_ref_keyfrm_->predict_pose(Twi,v,bias);
     T_cw_pred_ = imu::config::get_rel_pose_ci()*util::converter::inv(Twi2);
+//    std::cout<<"--------------------"<<std::endl;
+//    std::cout<<"frm "<<curr_frm_.id_<<std::endl;
+//    std::cout<<"pred "<<T_cw_pred_<<std::endl;
     velocity_ = imu_preintegrator_from_inertial_ref_keyfrm_->
         predict_velo(Twi,v,bias);
 
@@ -591,6 +589,7 @@ void tracking_module::update_motion_model() {
         last_frm_cam_pose_wc.block<3, 1>(0, 3) = last_frm_.get_cam_center();
         twist_is_valid_ = true;
         twist_ = curr_frm_.cam_pose_cw_ * last_frm_cam_pose_wc;
+
     }
     else {
         twist_is_valid_ = false;
@@ -625,9 +624,9 @@ bool tracking_module::optimize_current_frame_with_local_map() {
     search_local_landmarks();
 
     // optimize the pose
-    if(imu_prediction_is_valid_ && imu::config::is_tightly_coupled())
-        pose_optimizer_.optimize(curr_frm_,inertial_ref_keyfrm_,imu_preintegrator_from_inertial_ref_keyfrm_);
-    else
+//    if(imu_prediction_is_valid_ && imu::config::is_tightly_coupled())
+//        pose_optimizer_.optimize(curr_frm_,inertial_ref_keyfrm_,imu_preintegrator_from_inertial_ref_keyfrm_);
+//    else
         pose_optimizer_.optimize(curr_frm_);
 
     // count up the number of tracked landmarks
@@ -775,8 +774,8 @@ bool tracking_module::new_keyframe_is_needed() const {
         return false;
     }
 
-    if(imu::config::available() && curr_frm_.timestamp_-inertial_ref_keyfrm_->timestamp_>0.5)
-        return true;
+//    if(imu::config::available() && curr_frm_.timestamp_-inertial_ref_keyfrm_->timestamp_>0.5)
+//        return true;
 
     // cannnot insert the new keyframe in a second after relocalization
     const auto num_keyfrms = map_db_->get_num_keyframes();

@@ -20,6 +20,7 @@ find_package(g2o REQUIRED
              OPTIONAL_COMPONENTS
              g2o::csparse)
 
+
 # Check first if CSparse is built from g2o
 if(TARGET g2o::csparse)
     set(${CXSPARSE_LIBRARIES} g2o::csparse)
@@ -55,7 +56,6 @@ else()
 endif()
 
 # ----- Create OpenVSLAM library -----
-
 add_library(${PROJECT_NAME}
             ${CMAKE_CURRENT_SOURCE_DIR}/config.h
             ${CMAKE_CURRENT_SOURCE_DIR}/type.h
@@ -79,7 +79,7 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
 
 # OpenMP
 target_compile_options(${PROJECT_NAME} PRIVATE ${OpenMP_CXX_FLAGS})
-set(USE_OPENMP OFF CACHE BOOL "Use OpenMP")
+set(USE_OPENMP ON CACHE BOOL "Use OpenMP")
 if(USE_OPENMP)
     target_compile_definitions(${PROJECT_NAME} PUBLIC USE_OPENMP)
     message(STATUS "OpenMP: ENABLED")
@@ -87,7 +87,7 @@ else()
     message(STATUS "OpenMP: DISABLED")
 endif()
 
-set(USE_SSE_ORB OFF CACHE BOOL "Enable SSE3 instruction for ORB extraction")
+set(USE_SSE_ORB ON CACHE BOOL "Enable SSE3 instruction for ORB extraction")
 if(USE_SSE_ORB)
     target_compile_options(${PROJECT_NAME} PRIVATE $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-msse3>)
     target_compile_definitions(${PROJECT_NAME} PUBLIC USE_SSE_ORB)
@@ -96,7 +96,7 @@ else()
     message(STATUS "SSE3 for ORB extraction: DISABLED")
 endif()
 
-set(USE_SSE_FP_MATH OFF CACHE BOOL "Enable SSE instruction for floating-point operation")
+set(USE_SSE_FP_MATH ON CACHE BOOL "Enable SSE instruction for floating-point operation")
 if(USE_SSE_FP_MATH)
     target_compile_options(${PROJECT_NAME} PRIVATE $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-mfpmath=sse>)
     message(STATUS "SSE for floating-point operation: ENABLED")

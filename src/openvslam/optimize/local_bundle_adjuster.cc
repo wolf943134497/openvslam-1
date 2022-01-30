@@ -5,6 +5,7 @@
 #include "openvslam/optimize/internal/landmark_vertex_container.h"
 #include "openvslam/optimize/internal/se3/shot_vertex_container.h"
 #include "openvslam/optimize/internal/se3/reproj_edge_wrapper.h"
+#include "openvslam/optimize/internal/se3/position_prior_edge.h"
 #include "openvslam/util/converter.h"
 #include "openvslam/imu/internal/bias_edge_wrapper.h"
 #include "openvslam/imu/internal/inertial_edge_on_camera.h"
@@ -12,7 +13,7 @@
 #include "openvslam/imu/internal/velocity_vertex_container.h"
 #include "openvslam/imu/internal/bias_vertex_container.h"
 #include "openvslam/imu/preintegrator.h"
-
+#include "spdlog/spdlog.h"
 
 #include <unordered_map>
 
@@ -122,8 +123,11 @@ void local_bundle_adjuster::optimize(openvslam::data::keyframe* curr_keyfrm, boo
         block_solver = g2o::make_unique<g2o::BlockSolver_6_3>(std::move(linear_solver));
     }
     auto algorithm = new g2o::OptimizationAlgorithmLevenberg(std::move(block_solver));
+//    auto algorithm = new g2o::OptimizationAlgorithmDogleg(std::move(block_solver));
     g2o::SparseOptimizer optimizer;
     optimizer.setAlgorithm(algorithm);
+
+
     int n_fixed_vertices = 0;
 
     if (force_stop_flag) {
@@ -265,29 +269,52 @@ void local_bundle_adjuster::optimize(openvslam::data::keyframe* curr_keyfrm, boo
 
         }
     }
-    // 5. Perform the first optimization
 
+    //check if determinant system
+    if(enable_inertial_optimization_ && imu::config::is_tightly_coupled())
+    {
+        // vio mode
+        // fix world coordinate xyz & yaw
+        if(local_keyfrms.count(0))
+        {
+            auto first_keyfrm_vertex = keyfrm_vtx_container.get_vertex(local_keyfrms[0]);
+            auto edge = new openvslam::optimize::internal::se3::pose_fix_xyzyaw_edge;
+            edge->setVertex(0,first_keyfrm_vertex);
+            edge->setInformation(Mat44_t::Identity());
+            optimizer.addEdge(edge);
+        }
+    }
+    else
+    {
+        //vo mode
+        if(fixed_keyfrms.size()<2)
+        {
+            //fix the first two keyframe
+//            std::vector<data::keyframe*> keyframes;
+//            for(auto id_keyfrm:local_keyfrms)
+//                keyframes.push_back(id_keyfrm.second);
+//            std::sort(keyframes.begin(),keyframes.end(),[](const data::keyframe* f1,const data::keyframe* f2){
+//                return f1->id_<f2->id_;
+//            });
+//
+//            for(int i=0;i<2-fixed_keyfrms.size();i++)
+//            {
+//                spdlog::debug("fix keyframe {}",keyframes[i]->id_);
+//                keyfrm_vtx_container.get_vertex(keyframes[i])->setFixed(true);
+//            }
+            keyfrm_vtx_container.get_vertex(local_keyfrms[0])->setFixed(true);
+        }
+    }
+
+    // 5. Perform the first optimization
     if (force_stop_flag) {
         if (*force_stop_flag) {
             return;
         }
     }
-//    if(!enable_inertial_optimization_ && n_fixed_vertices<2)
-//    {
-//        //set the two vertices with smallest id as fixed
-//        //to avoid scale drift
-//        std::vector<unsigned int > ids;
-//        for(auto iter = keyfrm_vtx_container.begin();iter!=keyfrm_vtx_container.end();iter++)
-//        {
-//            ids.push_back(iter->first);
-//        }
-//        std::sort(ids.begin(),ids.end());
-//        keyfrm_vtx_container.get_vertex(ids[0])->setFixed(true);
-//        keyfrm_vtx_container.get_vertex(ids[1])->setFixed(true);
-//    }
-
 
     optimizer.initializeOptimization();
+//    optimizer.setVerbose(true);
     optimizer.optimize(num_first_iter_);
 
     // 6. Discard outliers, then perform the second optimization
@@ -321,6 +348,7 @@ void local_bundle_adjuster::optimize(openvslam::data::keyframe* curr_keyfrm, boo
             }
 
             edge->setRobustKernel(nullptr);
+
         }
 
         optimizer.initializeOptimization();
@@ -333,6 +361,12 @@ void local_bundle_adjuster::optimize(openvslam::data::keyframe* curr_keyfrm, boo
     outlier_observations.reserve(reproj_edge_wraps.size());
 
     for (auto& reproj_edge_wrap : reproj_edge_wraps) {
+        if(reproj_edge_wrap.is_outlier())
+        {
+            outlier_observations.emplace_back(std::make_pair(reproj_edge_wrap.shot_, reproj_edge_wrap.lm_));
+            continue;
+        }
+
         auto edge = reproj_edge_wrap.edge_;
 
         auto local_lm = reproj_edge_wrap.lm_;

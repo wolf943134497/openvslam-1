@@ -5,6 +5,7 @@
 #include "openvslam/optimize/internal/landmark_vertex_container.h"
 #include "openvslam/optimize/internal/se3/shot_vertex_container.h"
 #include "openvslam/optimize/internal/se3/reproj_edge_wrapper.h"
+#include "openvslam/optimize/internal/se3/position_prior_edge.h"
 #include "openvslam/util/converter.h"
 #include "openvslam/imu/internal/velocity_vertex_container.h"
 #include "openvslam/imu/internal/bias_vertex_container.h"
@@ -22,6 +23,7 @@
 #include <g2o/solvers/csparse/linear_solver_csparse.h>
 #include <g2o/core/optimization_algorithm_levenberg.h>
 #include <g2o/core/optimization_algorithm_gauss_newton.h>
+#include <g2o/core/optimization_algorithm_dogleg.h>
 
 namespace openvslam {
 namespace optimize {
@@ -38,7 +40,7 @@ void global_bundle_adjuster::optimize(const unsigned int lead_keyfrm_id_in_globa
 
     // 2. Construct an optimizer
 
-    std::unique_ptr<g2o::Solver> block_solver;
+    std::unique_ptr<g2o::BlockSolverBase> block_solver;
     g2o::OptimizationAlgorithmWithHessian* algorithm;
     if (enable_inertial_optimization_) {
         auto linear_solver = g2o::make_unique<g2o::LinearSolverCSparse<g2o::BlockSolverX::PoseMatrixType>>();
@@ -79,6 +81,15 @@ void global_bundle_adjuster::optimize(const unsigned int lead_keyfrm_id_in_globa
 
         auto keyfrm_vtx = keyfrm_vtx_container.create_vertex(keyfrm, false);
         optimizer.addVertex(keyfrm_vtx);
+
+
+        if(keyfrm->id_==0)
+        {
+            auto edge = new openvslam::optimize::internal::se3::pose_fix_xyzyaw_edge();
+            edge->setVertex(0,keyfrm_vtx);
+            edge->setInformation(Mat44_t::Identity());
+            optimizer.addEdge(edge);
+        }
 
         if (enable_inertial_optimization_) {
             auto velocity_vtx = velocity_vtx_container.create_vertex(keyfrm, false);
@@ -251,10 +262,7 @@ void global_bundle_adjuster::optimize(const unsigned int lead_keyfrm_id_in_globa
         }
     }
 
-    std::cout<<"num keyframes: "<<keyfrms.size()<<std::endl;
-    std::cout<<"num landmarks: "<<lms.size()<<std::endl;
-    std::cout<<"n inertial vertices: "<<n_inertial_vertices<<std::endl;
-    std::cout<<"n visual vertices: "<<n_visual_vertices<<std::endl;
+
 
 
     // 5. Perform optimization
@@ -268,63 +276,66 @@ void global_bundle_adjuster::optimize(const unsigned int lead_keyfrm_id_in_globa
     }
 
     // 6. Extract the result
+    {
+        std::unique_lock<std::mutex> lock(data::map_database::mtx_database_);
+        for (auto keyfrm : keyfrms) {
+            if (keyfrm->will_be_erased()) {
+                continue;
+            }
+            auto keyfrm_vtx = keyfrm_vtx_container.get_vertex(keyfrm);
+            const auto cam_pose_cw = util::converter::to_eigen_mat(keyfrm_vtx->estimate());
+            if (lead_keyfrm_id_in_global_BA == 0) {
+                keyfrm->set_cam_pose(cam_pose_cw);
+            }
+            else {
+                keyfrm->cam_pose_cw_after_loop_BA_ = cam_pose_cw;
+                keyfrm->loop_BA_identifier_ = lead_keyfrm_id_in_global_BA;
+            }
 
-    for (auto keyfrm : keyfrms) {
-        if (keyfrm->will_be_erased()) {
-            continue;
-        }
-        auto keyfrm_vtx = keyfrm_vtx_container.get_vertex(keyfrm);
-        const auto cam_pose_cw = util::converter::to_eigen_mat(keyfrm_vtx->estimate());
-        if (lead_keyfrm_id_in_global_BA == 0) {
-            keyfrm->set_cam_pose(cam_pose_cw);
-        }
-        else {
-            keyfrm->cam_pose_cw_after_loop_BA_ = cam_pose_cw;
-            keyfrm->loop_BA_identifier_ = lead_keyfrm_id_in_global_BA;
-        }
-
-        if (enable_inertial_optimization_) {
-            if (keyfrm->inertial_ref_keyfrm_) {
-                auto velocity_vtx = static_cast<imu::internal::velocity_vertex*>(velocity_vtx_container.get_vertex(keyfrm));
-                keyfrm->set_velocity( velocity_vtx->estimate());
-                if (use_shared_bias_) {
-                    auto gyr_bias_vtx = static_cast<imu::internal::bias_vertex*>(gyr_bias_vtx_container.get_vertex(keyfrms.back()));
-                    auto acc_bias_vtx = static_cast<imu::internal::bias_vertex*>(acc_bias_vtx_container.get_vertex(keyfrms.back()));
-                    keyfrm->set_bias( {acc_bias_vtx->estimate(), gyr_bias_vtx->estimate()});
+            if (enable_inertial_optimization_) {
+                if (keyfrm->inertial_ref_keyfrm_) {
+                    auto velocity_vtx = static_cast<imu::internal::velocity_vertex*>(velocity_vtx_container.get_vertex(keyfrm));
+                    keyfrm->set_velocity( velocity_vtx->estimate());
+                    if (use_shared_bias_) {
+                        auto gyr_bias_vtx = static_cast<imu::internal::bias_vertex*>(gyr_bias_vtx_container.get_vertex(keyfrms.back()));
+                        auto acc_bias_vtx = static_cast<imu::internal::bias_vertex*>(acc_bias_vtx_container.get_vertex(keyfrms.back()));
+                        keyfrm->set_bias( {acc_bias_vtx->estimate(), gyr_bias_vtx->estimate()});
+                    }
+                    else {
+                        auto gyr_bias_vtx = static_cast<imu::internal::bias_vertex*>(gyr_bias_vtx_container.get_vertex(keyfrm));
+                        auto acc_bias_vtx = static_cast<imu::internal::bias_vertex*>(acc_bias_vtx_container.get_vertex(keyfrm));
+                        keyfrm->set_bias( {acc_bias_vtx->estimate(), gyr_bias_vtx->estimate()});                }
                 }
-                else {
-                    auto gyr_bias_vtx = static_cast<imu::internal::bias_vertex*>(gyr_bias_vtx_container.get_vertex(keyfrm));
-                    auto acc_bias_vtx = static_cast<imu::internal::bias_vertex*>(acc_bias_vtx_container.get_vertex(keyfrm));
-                    keyfrm->set_bias( {acc_bias_vtx->estimate(), gyr_bias_vtx->estimate()});                }
+            }
+        }
+
+        for (unsigned int i = 0; i < lms.size(); ++i) {
+            if (!is_optimized_lm.at(i)) {
+                continue;
+            }
+
+            auto lm = lms.at(i);
+            if (!lm) {
+                continue;
+            }
+            if (lm->will_be_erased()) {
+                continue;
+            }
+
+            auto lm_vtx = lm_vtx_container.get_vertex(lm);
+            const Vec3_t pos_w = lm_vtx->estimate();
+
+            if (lead_keyfrm_id_in_global_BA == 0) {
+                lm->set_pos_in_world(pos_w);
+                lm->update_normal_and_depth();
+            }
+            else {
+                lm->pos_w_after_global_BA_ = pos_w;
+                lm->loop_BA_identifier_ = lead_keyfrm_id_in_global_BA;
             }
         }
     }
 
-    for (unsigned int i = 0; i < lms.size(); ++i) {
-        if (!is_optimized_lm.at(i)) {
-            continue;
-        }
-
-        auto lm = lms.at(i);
-        if (!lm) {
-            continue;
-        }
-        if (lm->will_be_erased()) {
-            continue;
-        }
-
-        auto lm_vtx = lm_vtx_container.get_vertex(lm);
-        const Vec3_t pos_w = lm_vtx->estimate();
-
-        if (lead_keyfrm_id_in_global_BA == 0) {
-            lm->set_pos_in_world(pos_w);
-            lm->update_normal_and_depth();
-        }
-        else {
-            lm->pos_w_after_global_BA_ = pos_w;
-            lm->loop_BA_identifier_ = lead_keyfrm_id_in_global_BA;
-        }
-    }
 
 }
 

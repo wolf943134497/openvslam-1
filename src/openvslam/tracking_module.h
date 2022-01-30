@@ -92,7 +92,7 @@ public:
     std::shared_ptr<Mat44_t> track_RGBD_image(const cv::Mat& img, const cv::Mat& depthmap, const double timestamp, const cv::Mat& mask = cv::Mat{});
 
     //! Queue an IMU data
-    void queue_IMU_data(const std::shared_ptr<imu::data>& imu_data);
+    void queue_IMU_data(std::shared_ptr<imu::data> imu_data);
 
     //! Request to update the pose to a given one.
     //! Return failure in case if previous request was not finished yet.
@@ -183,14 +183,8 @@ protected:
 
     void predict_from_imu();
 
-    //! Get last IMU index
-    unsigned int get_last_imu_index() const;
-
-    //! Cleanup old IMU data
-    void cleanup_old_imu_data();
-
     //! Preintegrate IMU data
-    void preintegrate_imu();
+    bool preintegrate_imu();
 
     //! Try to initialize with the current frame
     bool initialize();
@@ -294,6 +288,7 @@ protected:
     // for visual-inertial tracking
 
     // IMU data deque
+    mutable std::mutex mtx_imu_;
     std::deque<std::shared_ptr<imu::data>> imu_data_deque_;
 
     //-----------------------------------------
