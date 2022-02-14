@@ -445,6 +445,18 @@ void map_database::to_json(nlohmann::json& json_keyfrms, nlohmann::json& json_la
     json_landmarks = landmarks;
 }
 
+void map_database::set_gravity_direction_scale(const Sophus::SO3d& Rwg, double s) {
+    std::lock_guard<std::mutex> lock(mtx_Rwg_scale_);
+    Rwg_ = Rwg;
+    scale_ = s;
+}
+
+void map_database::get_gravity_direction_scale(Sophus::SO3d& Rwg, double& s) const {
+    std::lock_guard<std::mutex> lock(mtx_Rwg_scale_);
+    Rwg = Rwg_;
+    s = scale_;
+}
+
 void map_database::apply_scale_and_gravity_direction(const Mat33_t& Rwg, const double scale) {
     std::lock_guard<std::mutex> lock(mtx_map_access_);
 
@@ -476,6 +488,7 @@ void map_database::apply_scale_and_gravity_direction(const Mat33_t& Rwg, const d
 
     frm_stats_.apply_scale(scale);
 }
+
 
 } // namespace data
 } // namespace openvslam

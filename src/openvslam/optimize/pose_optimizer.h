@@ -35,7 +35,11 @@ public:
      */
     unsigned int optimize(data::frame& frm,
                           data::keyframe* ref_kfm = nullptr,
-                          imu::preintegrator* preint= nullptr) const;
+                          imu::preintegrator* preint= nullptr,
+                          const Vec3_t& frm_velocity = Vec3_t::Zero(),
+                          const Sophus::SO3d& Rwg = Sophus::SO3d(),
+                          const double scale=1,
+                          bool verbose = false) const;
 
 private:
     //! robust optimizationの試行回数

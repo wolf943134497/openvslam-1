@@ -288,7 +288,7 @@ void viewer::draw_predictions() {
         glColor3f(1,1,0);
         auto cam_pose_wc_predicts = map_publisher_->get_cam_pose_predicts();
         for (const auto pose : cam_pose_wc_predicts) {
-            draw_camera(pose, w);
+            draw_camera(pose.matrix(), w);
         }
     }
 }

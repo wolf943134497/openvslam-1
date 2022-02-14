@@ -22,6 +22,8 @@ public:
     void setToOriginImpl() override;
 
     void oplusImpl(const number_t* update_) override;
+
+    unsigned int keyframe_id_;
 };
 
 inline velocity_vertex::velocity_vertex()

@@ -170,6 +170,35 @@ Vec3_t keyframe::get_velocity() const {
     return velocity_;
 }
 
+void keyframe::update_velocity_bias(const Sophus::SO3d& Rwg, double scale) {
+    auto v = inertial_ref_keyfrm_->get_velocity();
+    auto bias = inertial_ref_keyfrm_->get_bias();
+
+
+    Sophus::SE3d Twg(Rwg,{0,0,0});
+    Sophus::SE3d Tci(imu::config::get_rel_pose_ci());
+
+    //----------------nav state 1
+    Sophus::SE3d Twc1(inertial_ref_keyfrm_->get_cam_pose_inv());
+    Sophus::SE3d Twc1_aligned = Twg.inverse()*Twc1;
+    Sophus::SE3d Twc1_aligned_scaled(Twc1_aligned.so3(),
+                                     Twc1_aligned.translation()*scale);
+    Sophus::SE3d Tgi1 = Twc1_aligned_scaled*Tci;
+    Sophus::SO3d Rgi1 = Tgi1.so3();
+
+    auto preintegrated = imu_preintegrator_from_inertial_ref_keyfrm_->preintegrated_;
+
+    Vec3_t g(0,0,-9.81);
+    const Sophus::SO3d delta_rotation(preintegrated->get_delta_rotation_on_bias(bias));
+    const Vec3_t delta_position = preintegrated->get_delta_position_on_bias(bias);
+    const Vec3_t delta_velocity = preintegrated->get_delta_velocity_on_bias(bias);
+    const double dt = preintegrated->dt_;
+
+    set_velocity(v + g*dt + Rgi1*delta_velocity);
+
+    set_bias(bias);
+}
+
 void keyframe::set_bias(const imu::bias& b) {
     std::lock_guard<std::mutex> lock(mtx_bias_);
     imu_bias_ = b;
@@ -505,14 +534,6 @@ void keyframe::set_imu_preintegrator(imu::preintegrator*& preint_, keyframe* ref
     ref->inertial_referrer_keyfrm_ = this;
 
     imu_bias_ = ref->imu_bias_;
-
-    if(ref->velocity_valid_)
-    {
-        auto Twi = ref->get_imu_pose_inv();
-        velocity_ = imu_preintegrator_from_inertial_ref_keyfrm_->
-                        predict_velo(Twi,ref->velocity_,ref->imu_bias_);
-        velocity_valid_ = true;
-    }
 }
 
 } // namespace data

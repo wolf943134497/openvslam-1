@@ -10,7 +10,7 @@ namespace openvslam {
 namespace imu {
 namespace internal {
 
-class gravity_dir_vertex final : public g2o::BaseVertex<2, Mat33_t> {
+class gravity_dir_vertex final : public g2o::BaseVertex<2, Sophus::SO3d> {
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
@@ -26,26 +26,22 @@ public:
 };
 
 inline gravity_dir_vertex::gravity_dir_vertex()
-    : g2o::BaseVertex<2, Mat33_t>() {}
+    : g2o::BaseVertex<2, Sophus::SO3d>() {}
 
 inline bool gravity_dir_vertex::read(std::istream& is) {
-    Mat33_t est;
-    read_matrix(is, est);
-    setEstimate(est);
-    return true;
+    return false;
 }
 
 inline bool gravity_dir_vertex::write(std::ostream& os) const {
-    write_matrix(os, estimate());
-    return os.good();
+    return false;
 }
 
 inline void gravity_dir_vertex::setToOriginImpl() {
-    setEstimate(Mat33_t::Identity());
+    setEstimate(Sophus::SO3d());
 }
 
 inline void gravity_dir_vertex::oplusImpl(const number_t* update_) {
-    setEstimate(estimate() * util::converter::exp_so3((Vec3_t() << update_[0], update_[1], 0.0).finished()));
+    setEstimate(estimate() * Sophus::SO3d::exp({update_[0], update_[1], 0.0}));
 }
 
 } // namespace internal

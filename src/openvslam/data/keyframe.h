@@ -109,6 +109,11 @@ public:
     Vec3_t get_velocity() const;
 
     /**
+     * update velocity. Needed when it's inertial_ref_kfr is optimized
+     */
+    void update_velocity_bias(const Sophus::SO3d& Rwg, double scale);
+
+    /**
      * Set bias
      */
     void set_bias(const imu::bias& b);

@@ -10,6 +10,7 @@
 #include "openvslam/module/two_view_triangulator.h"
 #include "openvslam/solve/essential_solver.h"
 #include "openvslam/imu/imu_initializer.h"
+#include "openvslam/optimize/global_inertial_gravity_scale_ba.h"
 #include "openvslam/optimize/global_bundle_adjuster.h"
 #include "openvslam/imu/imu_util.h"
 
@@ -21,8 +22,8 @@
 namespace openvslam {
 
 mapping_module::mapping_module(const YAML::Node& yaml_node, data::map_database* map_db)
-    : local_map_cleaner_(new module::local_map_cleaner(yaml_node["redundant_obs_ratio_thr"].as<double>(0.9))), map_db_(map_db),
-      local_bundle_adjuster_(new optimize::local_bundle_adjuster()) {
+    : local_map_cleaner_(new module::local_map_cleaner(yaml_node["redundant_obs_ratio_thr"].as<double>(0.9))), map_db_(map_db)
+       {
     spdlog::debug("CONSTRUCT: mapping_module");
     spdlog::debug("load mapping parameters");
 
@@ -118,6 +119,8 @@ void mapping_module::run() {
 }
 
 void mapping_module::queue_keyframe(data::keyframe* keyfrm) {
+    while(!keyfrm_acceptability_)
+        std::this_thread::sleep_for(std::chrono::milliseconds(3));
     std::lock_guard<std::mutex> lock(mtx_keyfrm_queue_);
     keyfrms_queue_.push_back(keyfrm);
     abort_local_BA_ = true;
@@ -179,12 +182,39 @@ void mapping_module::mapping_with_new_keyframe() {
 
     // local bundle adjustment
     abort_local_BA_ = false;
-    if (2 < map_db_->get_num_keyframes())
-        local_bundle_adjuster_->optimize(cur_keyfrm_, &abort_local_BA_);
+//    if (2 < map_db_->get_num_keyframes())
+//        local_bundle_adjuster_->optimize(cur_keyfrm_, &abort_local_BA_);
+    int num_keyframes = map_db_->get_num_keyframes();
+    if (num_keyframes>2)
+    {
+        if(map_db_->imu_initialized_)
+        {
+            openvslam::optimize::local_bundle_adjuster optimizer;
+            optimizer.set_enable_inertial_optimization(true);
+            Sophus::SO3d Rwg;
+            double scale;
+            map_db_->get_gravity_direction_scale(Rwg,scale);
+            optimizer.optimize(cur_keyfrm_, &abort_local_BA_,Rwg,scale);
+
+            std::unique_lock<std::mutex> lock(data::map_database::mtx_database_);
+            map_db_->set_gravity_direction_scale(Rwg,scale);
+            spdlog::debug("update Rwg and scale");
+
+        }
+        else
+        {
+            openvslam::optimize::local_bundle_adjuster optimizer;
+            Sophus::SO3d Rwg;
+            double scale;
+            optimizer.optimize(cur_keyfrm_, &abort_local_BA_,Rwg,scale);
+        }
+        update_child_keyfrms();
+    }
 
 
-    if (imu::config::available() && !imu_is_initialized_ && !reset_is_requested_) {
+    if (imu::config::available() && !map_db_->imu_initialized_ && !reset_is_requested_) {
         initialize_imu();
+
     }
 
     local_map_cleaner_->remove_redundant_keyframes(cur_keyfrm_);
@@ -192,20 +222,18 @@ void mapping_module::mapping_with_new_keyframe() {
 
 void mapping_module::initialize_imu() {
     auto keyfrms = imu::imu_util::gather_intertial_ref_keyframes(cur_keyfrm_);
-//    const float min_time = cur_keyfrm_->depth_is_avaliable() ? 1.0 : 2.0;
     const float min_time = cur_keyfrm_->depth_is_avaliable() ? 1.0 : 2.0;
+//    const float min_time = cur_keyfrm_->depth_is_avaliable() ? 5.0 : 10.0;
     const int min_keyfrms = 10;
     if (keyfrms.size() < min_keyfrms || cur_keyfrm_->timestamp_ - keyfrms.back()->timestamp_ < min_time) {
         return;
     }
     spdlog::info("start imu initialization with {} keyframes", keyfrms.size());
 
-    Mat33_t Rwg;
+    Sophus::SO3d Rwg;
     double scale = 1.0;
     const auto imu_initializer = optimize::imu_initializer(200);
 
-    //gyro bias is observable, prior not necessary
-    //acc bias prior should have nothing to do with whether the camera is monocular
     const double info_prior_acc = 1e5;
     bool succeeded = imu_initializer.initialize(keyfrms, Rwg, scale, cur_keyfrm_->depth_is_avaliable(), info_prior_acc);
 
@@ -213,27 +241,29 @@ void mapping_module::initialize_imu() {
         return;
     }
 
+    optimize::global_inertial_gravity_scale_ba gigs(map_db_);
+    gigs.optimize(Rwg,scale);
+
+
     std::unique_lock<std::mutex> lock(data::map_database::mtx_database_);
-    map_db_->apply_scale_and_gravity_direction(Rwg, scale);
-    lock.unlock();
+    map_db_->set_gravity_direction_scale(Sophus::SO3d(Rwg),scale);
+    map_db_->imu_initialized_ = true;
 
-    const bool use_huber_kernel = true;
-    const bool use_shared_bias = false;
-    optimize::global_bundle_adjuster global_bundle_adjuster(map_db_, 30, use_huber_kernel);
-    global_bundle_adjuster.enable_inertial_optimization(true, use_shared_bias);
-    global_bundle_adjuster.optimize(0, nullptr, info_prior_acc, 0);
+    spdlog::info("imu initialized");
 
-    if(fabs(scale-1)<0.01)
+
+}
+
+void mapping_module::update_child_keyfrms() {
+    Sophus::SO3d Rwg;
+    double scale;
+    map_db_->get_gravity_direction_scale(Rwg,scale);
+    data::keyframe* latest_keyfrm = cur_keyfrm_;
+    while(latest_keyfrm->inertial_referrer_keyfrm_)
     {
-        imu_is_initialized_ = true;
-        local_bundle_adjuster_->set_enable_inertial_optimization(true);
-        tracker_->imu_is_initialized_ = true;
-        spdlog::info("imu initialized");
+        latest_keyfrm = latest_keyfrm->inertial_referrer_keyfrm_;
+        latest_keyfrm->update_velocity_bias(Rwg,scale);
     }
-
-
-
-
 }
 
 void mapping_module::store_new_keyframe() {
@@ -507,8 +537,8 @@ void mapping_module::reset() {
     keyfrms_queue_.clear();
     local_map_cleaner_->reset();
     reset_is_requested_ = false;
-    imu_is_initialized_ = false;
-    local_bundle_adjuster_->set_enable_inertial_optimization(false);
+
+    map_db_->imu_initialized_ = false;
 }
 
 void mapping_module::request_pause() {

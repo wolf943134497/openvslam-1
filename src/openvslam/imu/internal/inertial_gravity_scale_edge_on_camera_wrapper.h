@@ -19,7 +19,7 @@ public:
                                                   bias_vertex* acc_bias_vtx, bias_vertex* gyr_bias_vtx,
                                                   optimize::internal::se3::shot_vertex* keyfrm_vtx1, velocity_vertex* velocity_vtx1,
                                                   optimize::internal::se3::shot_vertex* keyfrm_vtx2, velocity_vertex* velocity_vtx2,
-                                                  gravity_dir_vertex* gravity_dir_vtx, scale_vertex* scale_vtx);
+                                                  gravity_dir_vertex* Rwg_vtx, scale_vertex* scale_vtx);
 
     virtual ~inertial_gravity_scale_edge_on_camera_wrapper() = default;
 
@@ -41,11 +41,10 @@ inline inertial_gravity_scale_edge_on_camera_wrapper::inertial_gravity_scale_edg
     velocity_vertex* velocity_vtx1,
     optimize::internal::se3::shot_vertex* keyfrm_vtx2,
     velocity_vertex* velocity_vtx2,
-    gravity_dir_vertex* gravity_dir_vtx,
-    scale_vertex* scale_vtx)
+    gravity_dir_vertex* Rwg_vtx, scale_vertex* scale_vtx)
 {
     g2o::BaseMultiEdge<9, std::shared_ptr<preintegrated>>* edge;
-    edge = new inertial_gravity_scale_edge_on_camera(cfg->get_rel_rot_ic(), cfg->get_rel_trans_ic());
+    edge = new inertial_gravity_scale_edge_on_camera();
 
     edge->setInformation(imu_preintegrated->get_information().block<9, 9>(0, 0));
     edge->setMeasurement(imu_preintegrated);
@@ -56,7 +55,7 @@ inline inertial_gravity_scale_edge_on_camera_wrapper::inertial_gravity_scale_edg
     edge->setVertex(3, acc_bias_vtx);
     edge->setVertex(4, keyfrm_vtx2);
     edge->setVertex(5, velocity_vtx2);
-    edge->setVertex(6, gravity_dir_vtx);
+    edge->setVertex(6, Rwg_vtx);
     edge->setVertex(7, scale_vtx);
 
     edge_ = edge;

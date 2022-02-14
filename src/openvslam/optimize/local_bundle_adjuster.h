@@ -31,7 +31,7 @@ public:
      * @param curr_keyfrm
      * @param force_stop_flag
      */
-    void optimize(data::keyframe* curr_keyfrm, bool* const force_stop_flag) const;
+    void optimize(data::keyframe* curr_keyfrm, bool* const force_stop_flag,Sophus::SO3d& Rwg, double& scale) const;
 
     /**
      * set whether use imu
@@ -46,7 +46,7 @@ private:
      * @param local_keyfrms
      * @param force_stop_flag
      */
-    void optimize_imu(std::vector<data::keyframe*> local_keyfrms, bool* const force_stop_flag) const;
+    void optimize_imu(std::vector<data::keyframe*> local_keyfrms, bool* const force_stop_flag,Sophus::SO3d& Rwg, double& scale) const;
 
     //! number of iterations of first optimization
     const unsigned int num_first_iter_;

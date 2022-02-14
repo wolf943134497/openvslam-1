@@ -25,6 +25,7 @@ public:
 
     void oplusImpl(const number_t* update_) override;
 
+    unsigned int keeyfrm_id_;
 };
 
 inline shot_vertex::shot_vertex()

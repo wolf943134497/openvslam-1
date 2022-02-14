@@ -144,20 +144,19 @@ Mat44_t converter::inv(const Mat44_t& T) {
     return res;
 }
 
-Mat66_t converter::adjoint(const Mat44_t& T) {
-    Mat33_t R = T.topLeftCorner<3,3>();
-    Vec3_t t = T.topRightCorner<3,1>();
-    return adjoint(R,t);
-}
-
-Mat66_t converter::adjoint(const Mat33_t& R, const Vec3_t& t) {
+Mat66_t converter::adjoint(const Mat44_t & T) {
+    const Mat33_t& R = T.topLeftCorner<3,3>();
+    const Vec3_t& t = T.topRightCorner<3,1>();
     Mat66_t res;
-    res.topLeftCorner<3,3>() = R;
-    res.bottomRightCorner<3,3>() = R;
-    res.topRightCorner<3,3>() = to_skew_symmetric_mat(t)*R;
-    res.bottomLeftCorner<3,3>().setZero();
+    res<<R,to_skew_symmetric_mat(t)*R,
+        Mat33_t::Zero(),R;
     return res;
 }
+
+
+
+
+
 
 } // namespace util
 } // namespace openvslam

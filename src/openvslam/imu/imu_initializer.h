@@ -25,7 +25,7 @@ public:
     /**
      * Perform optimization
      */
-    bool initialize(const std::vector<data::keyframe*>& keyfrms, Mat33_t& Rwg, double& scale,
+    bool initialize(const std::vector<data::keyframe*>& keyfrms, Sophus::SO3d & Rwg, double& scale,
                     bool depth_is_avaliable, float info_prior_acc) const;
 
 private:

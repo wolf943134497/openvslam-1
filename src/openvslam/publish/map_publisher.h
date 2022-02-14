@@ -42,9 +42,9 @@ public:
 
     void clear_cam_pose_predicts();
 
-    void add_cam_pose_predicts(const Mat44_t& cam_pose_cw_pred);
+    void add_cam_pose_predicts(const Sophus::SE3d & cam_pose_cw_pred);
 
-    std::vector<Mat44_t> get_cam_pose_predicts();
+    std::vector<Sophus::SE3d> get_cam_pose_predicts();
 
     void clear_cam_poses();
 
@@ -101,7 +101,7 @@ private:
     Mat44_t cam_pose_wc_ = Mat44_t::Identity();
 
     std::mutex mtx_cam_pose_pred;
-    std::vector<Mat44_t> cam_pose_wc_predicts_;
+    std::vector<Sophus::SE3d> cam_pose_wc_predicts_;
 
     std::mutex mtx_cam_poses_;
     std::vector<Mat44_t> cam_poses_wc_;

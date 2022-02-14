@@ -8,6 +8,7 @@
 #include <vector>
 #include <unordered_map>
 
+#include "sophus/so3.hpp"
 #include <nlohmann/json_fwd.hpp>
 
 namespace openvslam {
@@ -190,8 +191,26 @@ public:
      */
     void apply_scale_and_gravity_direction(const Mat33_t& Rwg, const double scale);
 
+    /**
+     * Set Rwg_ and scale
+     * @param Rwg
+     * @param s
+     */
+    void set_gravity_direction_scale(const Sophus::SO3d& Rwg, double s);
+
+    /**
+     * Get Rwg_ and scale
+     * @param Rwg
+     * @param s
+     */
+    void get_gravity_direction_scale(Sophus::SO3d& Rwg, double& s) const;
+
+
     //! origin keyframe
     keyframe* origin_keyfrm_ = nullptr;
+
+    //! is imu initialized?
+    std::atomic<bool> imu_initialized_{false};
 
     //! mutex for locking ALL access to the database
     //! (NOTE: cannot used in map_database class)
@@ -257,6 +276,14 @@ private:
 
     //! frame statistics
     frame_statistics frm_stats_;
+
+    mutable std::mutex mtx_Rwg_scale_;
+
+    //! rotation from gravity-aligned inertial frame to world frame
+    Sophus::SO3d Rwg_;
+
+    //! inverse scale of visual slam
+    double scale_;
 };
 
 } // namespace data

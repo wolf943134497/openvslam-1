@@ -181,13 +181,11 @@ void global_bundle_adjuster::optimize(const unsigned int lead_keyfrm_id_in_globa
 
             if (!use_shared_bias_) {
                 imu::internal::bias_edge_wrapper acc_bias_edge_wrap(keyfrm->imu_preintegrator_from_inertial_ref_keyfrm_->preintegrated_,
-                                                               acc_bias_vtx1,acc_bias_vtx2,
-                                                               sqrt_chi_sq, use_huber_kernel_inertial);
+                                                               acc_bias_vtx1,acc_bias_vtx2);
                 optimizer.addEdge(acc_bias_edge_wrap.edge_);
 
                 imu::internal::bias_edge_wrapper gyr_bias_edge_wrap(keyfrm->imu_preintegrator_from_inertial_ref_keyfrm_->preintegrated_,
-                                                               gyr_bias_vtx1,gyr_bias_vtx2,
-                                                               sqrt_chi_sq, use_huber_kernel_inertial);
+                                                               gyr_bias_vtx1,gyr_bias_vtx2);
                 optimizer.addEdge(gyr_bias_edge_wrap.edge_);
                 n_inertial_vertices += 2;
             }
@@ -274,10 +272,11 @@ void global_bundle_adjuster::optimize(const unsigned int lead_keyfrm_id_in_globa
     if (force_stop_flag && *force_stop_flag) {
         return;
     }
-
+    printf("opt 111111\n");
     // 6. Extract the result
     {
         std::unique_lock<std::mutex> lock(data::map_database::mtx_database_);
+        printf("opt 222222\n");
         for (auto keyfrm : keyfrms) {
             if (keyfrm->will_be_erased()) {
                 continue;

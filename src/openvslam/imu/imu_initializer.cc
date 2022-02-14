@@ -2,27 +2,30 @@
 #include "openvslam/data/landmark.h"
 #include "openvslam/imu/imu_initializer.h"
 #include "openvslam/imu/preintegrator.h"
+#include "openvslam/imu/preintegrated.h"
 #include "openvslam/imu/internal/velocity_vertex_container.h"
 #include "openvslam/imu/internal/bias_vertex_container.h"
 #include "openvslam/imu/internal/prior_bias_edge_wrapper.h"
 #include "openvslam/imu/internal/gravity_dir_vertex.h"
 #include "openvslam/imu/internal/scale_vertex.h"
-#include "openvslam/imu/internal/inertial_gravity_scale_edge_on_imu_wrapper.h"
 #include "openvslam/optimize/internal/se3/shot_vertex_container.h"
 
 #include <g2o/core/block_solver.h>
 #include <g2o/solvers/eigen/linear_solver_eigen.h>
 #include <g2o/core/optimization_algorithm_levenberg.h>
+#include "sophus/sim3.hpp"
+#include "sophus/se3.hpp"
 
 #include <spdlog/spdlog.h>
 
+using namespace Sophus;
 namespace openvslam {
 namespace optimize {
 
 imu_initializer::imu_initializer(const unsigned int num_iter)
     : num_iter_(num_iter) {}
 
-bool imu_initializer::initialize(const std::vector<data::keyframe*>& keyfrms, Mat33_t& Rwg, double& scale,
+bool imu_initializer::initialize(const std::vector<data::keyframe*>& keyfrms, Sophus::SO3d & Rwg, double& scale,
                                  bool depth_is_avaliable, float info_prior_acc) const {
 
 
@@ -96,7 +99,6 @@ bool imu_initializer::initialize(const std::vector<data::keyframe*>& keyfrms, Ma
 
 //    printf("2. estimating scale, gravity\n");
     scale = 1.0;
-    Rwg.setIdentity();
     const Vec3_t gI{0,0,-9.81};
     Vec3_t gW=gI;
     int N = keyfrms_sorted.size();
@@ -147,29 +149,31 @@ bool imu_initializer::initialize(const std::vector<data::keyframe*>& keyfrms, Ma
     }
     Mat44_t Hsgw = A.transpose()*A;
     Vec4_t bsgw = A.transpose()*B;
-    if(depth_is_avaliable)
-    {
-        //in this case visual odometry has absolute scale, no need to solve scale here
-        //use schur complete
-        Mat33_t Hgw = Hsgw.bottomRightCorner<3,3>()-Hsgw.bottomLeftCorner<3,1>()*
-                        Hsgw.topRightCorner<1,3>()/Hsgw(0,0);
-        Vec3_t bgw = bsgw.tail<3>()-Hsgw.bottomLeftCorner<3,1>()*bsgw(0)/Hsgw(0,0);
-        gW = Hgw.ldlt().solve(bgw);
-    }
-    else
-    {
+//    if(depth_is_avaliable)
+//    {
+//        //in this case visual odometry has absolute scale, no need to solve scale here
+//        //use schur complete
+//        Mat33_t Hgw = Hsgw.bottomRightCorner<3,3>()-Hsgw.bottomLeftCorner<3,1>()*
+//                        Hsgw.topRightCorner<1,3>()/Hsgw(0,0);
+//        Vec3_t bgw = bsgw.tail<3>()-Hsgw.bottomLeftCorner<3,1>()*bsgw(0)/Hsgw(0,0);
+//        gW = Hgw.ldlt().solve(bgw);
+//    }
+//    else
+//    {
         Eigen::VectorXd sgW = Hsgw.ldlt().solve(bsgw);
         scale = sgW[0];
         gW = sgW.tail<3>();
-    }
+//    }
 
 //    printf("initial scale: %.3f, initial gW: %.3f %.3f %.3f \n",scale,gW[0],gW[1],gW[2]);
-
+    std::cout<<"gW-1: "<<gW.transpose()<<std::endl;
     gW = gW.normalized()*9.81;
+    std::cout<<"gW0: "<<gW.transpose()<<std::endl;
     Vec3_t rotationAxis = (gI.cross(gW)).normalized();
     double angle = atan2((gI.cross(gW)).norm(),gI.dot(gW));
-    Rwg = util::converter::exp_so3(rotationAxis*angle);
+    Rwg = Sophus::SO3d::exp(rotationAxis*angle);
 
+    std::cout<<"Rwg: "<<Rwg.matrix()<<std::endl;
     Vec3_t acc_bias;acc_bias.setZero();
     std::vector<Vec3_t> velocities(N);
     //compute velocities
@@ -179,132 +183,52 @@ bool imu_initializer::initialize(const std::vector<data::keyframe*>& keyfrms, Ma
         data::keyframe* f2 = keyfrms_sorted[i+1];
         assert(f2->inertial_ref_keyfrm_ == f1);
 
-        const Mat44_t Twc1 = f1->get_cam_pose_inv();
-        const Mat33_t Rwc1 = Twc1.topLeftCorner<3,3>();
-        const Mat33_t Rwi1 = Rwc1*imu::config::get_rel_rot_ci();
-        const Vec3_t twc1 = Twc1.topRightCorner<3,1>();
-
-        const Mat44_t Twc2 = f2->get_cam_pose_inv();
-        const Mat33_t Rwc2 = Twc2.topLeftCorner<3,3>();
-        const Vec3_t twc2 = Twc2.topRightCorner<3,1>();
-
         const auto preintegrated12 = f2->imu_preintegrator_from_inertial_ref_keyfrm_->preintegrated_;
+        const imu::bias b(acc_bias, gyr_bias);
+        const Mat33_t delta_rotation = preintegrated12->get_delta_rotation_on_bias(b);
+        const Vec3_t delta_velocity = preintegrated12->get_delta_velocity_on_bias(b);
+        const Vec3_t delta_position = preintegrated12->get_delta_position_on_bias(b);
         const double dt = preintegrated12->dt_;
 
-        const Vec3_t delta_position = preintegrated12->get_delta_position_on_bias({{0,0,0},gyr_bias});
+        Mat44_t Twg;
+        Twg<<Rwg.matrix(),Vec3_t::Zero(),
+            0,0,0,1;
 
-        velocities[i]=-(0.5 * Rwg*gI * dt * dt +Rwi1*delta_position-scale*(twc2-twc1)+(Rwc2-Rwc1)*imu::config::get_rel_trans_ci())/dt;
-    }
-    velocities.back() = velocities[velocities.size()-2];
-
-//    printf("3. joint optimization\n");
-
-    //GN solve
-
-
-    //scale,gravity,velocities,acc_bias
-    int dim = 1 + 3 + 3*N + 3;
-    Eigen::MatrixXd H(dim,dim);
-    Eigen::VectorXd b(dim);
-    for(int iter=0;iter<iters;iter++) {
-        error = 0;
-        count = 0;
-        H.setZero();
-        b.setZero();
-        for (size_t i = 1; i < keyfrms_sorted.size(); i++) {
-            auto keyfrm = keyfrms_sorted.at(i);
-            if (!keyfrm) {
-                continue;
-            }
-            if (keyfrm->will_be_erased()) {
-                continue;
-            }
-            if (!keyfrm->inertial_ref_keyfrm_) {
-                continue;
-            }
-            assert(keyfrm->imu_preintegrator_from_inertial_ref_keyfrm_);
-            const auto preintegrated = keyfrm->imu_preintegrator_from_inertial_ref_keyfrm_->preintegrated_;
-            auto ref_keyfrm = keyfrm->inertial_ref_keyfrm_;
-            assert(ref_keyfrm==keyfrms_sorted[i-1]);
-            assert(fabs(ref_keyfrm->timestamp_ + keyfrm->imu_preintegrator_from_inertial_ref_keyfrm_->preintegrated_->dt_ - keyfrm->timestamp_) < 0.01);
+        Mat44_t Tcw1 = f1->get_cam_pose();
+        Mat44_t Twc1 = util::converter::inv(Tcw1);
+        Mat44_t Twc1_aligned = util::converter::inv(Twg)*Twc1;
+        Mat44_t Twc1_aligned_scaled = Twc1_aligned;
+        Twc1_aligned_scaled.topRightCorner<3,1>() *= scale;
+        Mat44_t Tgi1 = Twc1_aligned_scaled*imu::config::get_rel_pose_ci();
+        Mat33_t Rgi1 = Tgi1.topLeftCorner<3,3>();
+        Vec3_t tgi1 = Tgi1.topRightCorner<3,1>();
 
 
-            const Mat44_t Twc1 = ref_keyfrm->get_cam_pose_inv();
-            const Mat33_t Rwc1 = Twc1.topLeftCorner<3,3>();
-            const Mat33_t Rwi1 = Rwc1*imu::config::get_rel_rot_ci();
-            const Vec3_t twc1 = Twc1.topRightCorner<3,1>();
-            const Vec3_t v1 = velocities[i-1];
+        //----------------nav state 2
+        Mat44_t Tcw2 = f2->get_cam_pose();
+        Mat44_t Twc2 = util::converter::inv(Tcw2);
+        Mat44_t Twc2_aligned = util::converter::inv(Twg)*Twc2;
+        Mat44_t Twc2_aligned_scaled = Twc2_aligned;
+        Twc2_aligned_scaled.topRightCorner<3,1>() *= scale;
+        Mat44_t Tgi2 = Twc2_aligned_scaled*imu::config::get_rel_pose_ci();
+        Mat33_t Rgi2 = Tgi2.topLeftCorner<3,3>();
+        Vec3_t tgi2 = Tgi2.topRightCorner<3,1>();
 
-            const Mat44_t Twc2 = keyfrm->get_cam_pose_inv();
-            const Mat33_t Rwc2 = Twc2.topLeftCorner<3,3>();
-            const Vec3_t twc2 = Twc2.topRightCorner<3,1>();
-            const Vec3_t v2 = velocities[i];
+        Vec3_t g(0,0,-9.81);
 
-            const double dt = preintegrated->dt_;
+        velocities[i] = (tgi2 - tgi1 - Rgi1*delta_position - 0.5 * g * dt * dt)/dt;
+        velocities[i+1] = velocities[i] +g*dt +Rgi1*delta_velocity;
 
-            const Vec3_t delta_velocity = preintegrated->get_delta_velocity_on_bias({acc_bias,gyr_bias});
-            const Vec3_t delta_position = preintegrated->get_delta_position_on_bias({acc_bias,gyr_bias});
-
-            const Vec3_t error_velocity = Rwi1.transpose() * (v2 - v1 - Rwg*gI * dt) - delta_velocity;
-            const Vec3_t error_position = Rwi1.transpose() * (scale*(twc2-twc1)+(Rwc2-Rwc1)*imu::config::get_rel_trans_ci()
-                                                              - v1 * dt - 0.5 * Rwg*gI * dt * dt) - delta_position;
-
-            Vec6_t r;
-            //note: ignore reletive weight between velocity and position here since they are correlated
-            r<<error_velocity,error_position;
-            error += r.squaredNorm();
-            count += 1;
-
-            Vec6_t J_scale;
-            J_scale<<0,0,0,Rwi1.transpose()*(twc2-twc1)*scale;
-
-            Eigen::Matrix<double,6,3> J_gravity;
-            J_gravity<<Rwi1.transpose()*Rwg*util::converter::to_skew_symmetric_mat(gI * dt),
-                Rwi1.transpose() *0.5*Rwg*util::converter::to_skew_symmetric_mat(gI * dt * dt);
-
-            Eigen::Matrix<double,6,3> J_v1,J_v2;
-            J_v1<<-Rwi1.transpose(),-Rwi1.transpose()*dt;
-            J_v2<<Rwi1.transpose(),Mat33_t::Zero();
-
-            Eigen::Matrix<double,6,3> J_acc_bias;
-            J_acc_bias<<-preintegrated->jacob_velocity_acc_,-preintegrated->jacob_position_acc_;
-
-            Eigen::MatrixXd J(6,dim);J.setZero();
-            J.col(0) = J_scale;
-            J.middleCols(1,3) = J_gravity;
-            J.middleCols(4+3*(i-1),3) = J_v1;
-            J.middleCols(4+3*i,3) = J_v2;
-            J.rightCols(3) = J_acc_bias;
-
-            double weight = 1/dt;
-            H += weight*J.transpose()*J;
-            b += weight*J.transpose()*r;
-        }
-
-        //add prior to acc_bias
-        H.bottomRightCorner<3,3>() += info_prior_acc*Mat33_t::Identity();
-        b.tail<3>() += info_prior_acc*acc_bias;
-
-        if(depth_is_avaliable)
-        {
-            H(0,0) = 1e14; //fix scale
-            b(0) = 1e14*(scale-1);
-        }
-
-        Eigen::VectorXd increment = -H.ldlt().solve(b);
-
-        //do update
-        if(!depth_is_avaliable)
-            scale = scale*std::exp(increment[0]);
-        Rwg = Rwg*util::converter::exp_so3(increment.segment<3>(1));
-        for(int i=0;i<keyfrms_sorted.size();i++)
-            velocities[i] += increment.segment<3>(4+3*i);
-        acc_bias += increment.tail<3>();
-
-        double rmse = sqrt(error/count);
-        std::cout<<"iter: "<<iter<<" rmse: "<<rmse<<" inc: "<<increment.norm()<<" scale: "<<scale<<" acc_bias: "<<acc_bias.transpose()<<" gW:"<<(Rwg*gI).transpose()<<std::endl;
-        if(increment.norm()<1e-6)
-            break;
+//        std::cout<<f1->id_<<" "<<f2->id_<<std::endl;
+//        std::cout<<"dt: "<<dt<<std::endl;
+//        std::cout<<"tgi1: "<<tgi1.transpose()<<std::endl;
+//        std::cout<<"tgi2: "<<tgi2.transpose()<<std::endl;
+//        std::cout<<"Rgi1: "<<Rgi1<<std::endl;
+//        std::cout<<"delta_velocity: "<<delta_velocity.transpose()<<std::endl;
+//        std::cout<<"delta_position: "<<delta_position.transpose()<<std::endl;
+//        std::cout<<"Rgi1*delta_position: "<<(Rgi1*delta_position).transpose()<<std::endl;
+//        std::cout<<"velocities[i]: "<<velocities[i].transpose()<<std::endl;
+//        std::cout<<"--------------------"<<std::endl;
     }
 
     printf("scale: %.3f\n",scale);
@@ -315,7 +239,9 @@ bool imu_initializer::initialize(const std::vector<data::keyframe*>& keyfrms, Ma
     {
         keyfrms_sorted[i]->set_velocity(velocities[i]);
         keyfrms_sorted[i]->set_bias(bias);
+        std::cout<<keyfrms_sorted[i]->id_<<" "<<velocities[i].transpose()<<std::endl;
     }
+
 
     return scale>0;
 }

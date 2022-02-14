@@ -8,8 +8,9 @@
 #include "openvslam/optimize/internal/se3/position_prior_edge.h"
 #include "openvslam/util/converter.h"
 #include "openvslam/imu/internal/bias_edge_wrapper.h"
-#include "openvslam/imu/internal/inertial_edge_on_camera.h"
-#include "openvslam/imu/internal//inertial_edge_wrapper.h"
+#include "openvslam/imu/internal/inertial_gravity_scale_edge_on_camera_wrapper.h"
+#include "openvslam/imu/internal/gravity_dir_vertex.h"
+#include "openvslam/imu/internal/scale_vertex.h"
 #include "openvslam/imu/internal/velocity_vertex_container.h"
 #include "openvslam/imu/internal/bias_vertex_container.h"
 #include "openvslam/imu/preintegrator.h"
@@ -41,7 +42,7 @@ void local_bundle_adjuster::set_enable_inertial_optimization(bool v) {
     enable_inertial_optimization_ = v;
 }
 
-void local_bundle_adjuster::optimize(openvslam::data::keyframe* curr_keyfrm, bool* const force_stop_flag) const {
+void local_bundle_adjuster::optimize(openvslam::data::keyframe* curr_keyfrm, bool* const force_stop_flag, Sophus::SO3d& Rwg, double& scale) const {
     // 1. Aggregate the local and fixed keyframes, and local landmarks
 
     // Correct the local keyframes of the current keyframe
@@ -123,10 +124,9 @@ void local_bundle_adjuster::optimize(openvslam::data::keyframe* curr_keyfrm, boo
         block_solver = g2o::make_unique<g2o::BlockSolver_6_3>(std::move(linear_solver));
     }
     auto algorithm = new g2o::OptimizationAlgorithmLevenberg(std::move(block_solver));
-//    auto algorithm = new g2o::OptimizationAlgorithmDogleg(std::move(block_solver));
+    //    auto algorithm = new g2o::OptimizationAlgorithmDogleg(std::move(block_solver));
     g2o::SparseOptimizer optimizer;
     optimizer.setAlgorithm(algorithm);
-
 
     int n_fixed_vertices = 0;
 
@@ -141,34 +141,31 @@ void local_bundle_adjuster::optimize(openvslam::data::keyframe* curr_keyfrm, boo
     int N = local_keyfrms.size() + fixed_keyfrms.size();
     internal::se3::shot_vertex_container keyfrm_vtx_container(vtx_id_offset, N);
     imu::internal::velocity_vertex_container velocity_vtx_container(vtx_id_offset, N);
-    imu::internal::bias_vertex_container acc_bias_vtx_container(vtx_id_offset,imu::internal::bias_vertex::Type::ACC, N);
-    imu::internal::bias_vertex_container gyr_bias_vtx_container(vtx_id_offset,imu::internal::bias_vertex::Type::Gyr, N);
+    imu::internal::bias_vertex_container acc_bias_vtx_container(vtx_id_offset, imu::internal::bias_vertex::Type::ACC, N);
+    imu::internal::bias_vertex_container gyr_bias_vtx_container(vtx_id_offset, imu::internal::bias_vertex::Type::Gyr, N);
 
-    auto add_keyfrms_to_optimizer = [&](const std::unordered_map<unsigned int, data::keyframe*>& kfrms, bool fixed)
-    {
-      for (auto& id_keyfrm_pair : kfrms) {
-          auto keyfrm = id_keyfrm_pair.second;
+    auto add_keyfrms_to_optimizer = [&](const std::unordered_map<unsigned int, data::keyframe*>& kfrms, bool fixed) {
+        for (auto& id_keyfrm_pair : kfrms) {
+            auto keyfrm = id_keyfrm_pair.second;
 
-          auto keyfrm_vtx = keyfrm_vtx_container.create_vertex(keyfrm, fixed);
+            auto keyfrm_vtx = keyfrm_vtx_container.create_vertex(keyfrm, fixed);
 
-          optimizer.addVertex(keyfrm_vtx);
-          n_fixed_vertices += keyfrm_vtx->fixed();
-          if(enable_inertial_optimization_ && imu::config::is_tightly_coupled())
-          {
-              auto velocity_vtx = velocity_vtx_container.create_vertex(keyfrm, fixed);
-              optimizer.addVertex(velocity_vtx);
-              auto bias = keyfrm->get_bias();
-              auto acc_bias_vtx = acc_bias_vtx_container.create_vertex(keyfrm->id_, bias.acc_, fixed);
-              optimizer.addVertex(acc_bias_vtx);
-              auto gyr_bias_vtx = gyr_bias_vtx_container.create_vertex(keyfrm->id_, bias.gyr_, fixed);
-              optimizer.addVertex(gyr_bias_vtx);
-          }
-      }
+            optimizer.addVertex(keyfrm_vtx);
+            n_fixed_vertices += keyfrm_vtx->fixed();
+            if (enable_inertial_optimization_ && imu::config::is_tightly_coupled()) {
+                auto velocity_vtx = velocity_vtx_container.create_vertex(keyfrm, fixed);
+                optimizer.addVertex(velocity_vtx);
+                auto bias = keyfrm->get_bias();
+                auto acc_bias_vtx = acc_bias_vtx_container.create_vertex(keyfrm->id_, bias.acc_, fixed);
+                optimizer.addVertex(acc_bias_vtx);
+                auto gyr_bias_vtx = gyr_bias_vtx_container.create_vertex(keyfrm->id_, bias.gyr_, fixed);
+                optimizer.addVertex(gyr_bias_vtx);
+            }
+        }
     };
 
     add_keyfrms_to_optimizer(local_keyfrms, false);
-    add_keyfrms_to_optimizer(fixed_keyfrms,true);
-
+    add_keyfrms_to_optimizer(fixed_keyfrms, true);
 
     // 4. Connect the vertices of the keyframe and the landmark by using an edge of reprojection constraint
 
@@ -211,8 +208,8 @@ void local_bundle_adjuster::optimize(openvslam::data::keyframe* curr_keyfrm, boo
             const float x_right = keyfrm->stereo_x_right_.at(idx);
             const float inv_sigma_sq = keyfrm->inv_level_sigma_sq_.at(undist_keypt.octave);
             const auto sqrt_chi_sq = (keyfrm->camera_->setup_type_ == camera::setup_type_t::Monocular)
-                                     ? sqrt_chi_sq_2D
-                                     : sqrt_chi_sq_3D;
+                                         ? sqrt_chi_sq_2D
+                                         : sqrt_chi_sq_3D;
             auto reproj_edge_wrap = reproj_edge_wrapper(keyfrm, keyfrm_vtx, local_lm, lm_vtx,
                                                         idx, undist_keypt.pt.x, undist_keypt.pt.y, x_right,
                                                         inv_sigma_sq, sqrt_chi_sq);
@@ -221,18 +218,32 @@ void local_bundle_adjuster::optimize(openvslam::data::keyframe* curr_keyfrm, boo
         }
     }
 
-    if(enable_inertial_optimization_ && imu::config::is_tightly_coupled())
-    {
+    auto Rwg_vtx = new imu::internal::gravity_dir_vertex();
+    Rwg_vtx->setId(*(vtx_id_offset) + 1);
+    Rwg_vtx->setEstimate(Rwg);
+    optimizer.addVertex(Rwg_vtx);
+    Rwg_vtx->setFixed(true);
+
+    auto scale_vtx = new imu::internal::scale_vertex();
+    scale_vtx->setId(*(vtx_id_offset) + 2);
+    scale_vtx->setEstimate(scale);
+    optimizer.addVertex(scale_vtx);
+    scale_vtx->setFixed(true);
+
+    if (enable_inertial_optimization_ && imu::config::is_tightly_coupled()) {
+        Rwg_vtx->setFixed(false);
+        scale_vtx->setFixed(false);
+        std::cout << "scale before: " << scale_vtx->estimate() << std::endl;
+        std::cout << "gravity before: " << Rwg_vtx->estimate().matrix() << std::endl;
+
         //add inertial vertices
 
-        for(auto id_kfr: local_keyfrms)
-        {
+        for (auto id_kfr : local_keyfrms) {
             auto kfr = id_kfr.second;
             auto ref_kfr = kfr->inertial_ref_keyfrm_;
-            if(!ref_kfr)
+            if (!ref_kfr)
                 continue;
-            if(local_keyfrms.count(ref_kfr->id_) || fixed_keyfrms.count(ref_kfr->id_))
-            {
+            if (local_keyfrms.count(ref_kfr->id_) || fixed_keyfrms.count(ref_kfr->id_)) {
                 auto acc_bias_vtx1 = acc_bias_vtx_container.get_vertex(ref_kfr);
                 auto gyr_bias_vtx1 = gyr_bias_vtx_container.get_vertex(ref_kfr);
                 auto acc_bias_vtx2 = acc_bias_vtx_container.get_vertex(kfr);
@@ -248,61 +259,24 @@ void local_bundle_adjuster::optimize(openvslam::data::keyframe* curr_keyfrm, boo
                 // 9 degree-of-freedom (n=9)
                 constexpr float chi_sq = 16.92;
                 const float sqrt_chi_sq = std::sqrt(chi_sq);
-                imu::internal::inertial_edge_wrapper inertial_edge_wrap(kfr->imu_preintegrator_from_inertial_ref_keyfrm_->preintegrated_,
-                                                                        acc_bias_vtx1, gyr_bias_vtx1,
-                                                                        keyfrm_vtx1, velocity_vtx1, keyfrm_vtx2, velocity_vtx2,
-                                                                        sqrt_chi_sq, use_huber_kernel_inertial);
+                imu::internal::inertial_gravity_scale_edge_on_camera_wrapper wrap(kfr->imu_preintegrator_from_inertial_ref_keyfrm_->preintegrated_,
+                                                                                  acc_bias_vtx1, gyr_bias_vtx1,
+                                                                                  keyfrm_vtx1, velocity_vtx1, keyfrm_vtx2, velocity_vtx2,
+                                                                                  Rwg_vtx, scale_vtx);
 
-                optimizer.addEdge(inertial_edge_wrap.edge_);
-
+//                g2o::RobustKernelHuber* rk = new g2o::RobustKernelHuber;
+//                wrap.edge_->setRobustKernel(rk);
+//                rk->setDelta(1.f);
+                optimizer.addEdge(wrap.edge_);
 
                 imu::internal::bias_edge_wrapper acc_bias_edge_wrap(kfr->imu_preintegrator_from_inertial_ref_keyfrm_->preintegrated_,
-                                                                    acc_bias_vtx1,acc_bias_vtx2,
-                                                                    sqrt_chi_sq, use_huber_kernel_inertial);
+                                                                    acc_bias_vtx1, acc_bias_vtx2);
                 optimizer.addEdge(acc_bias_edge_wrap.edge_);
 
                 imu::internal::bias_edge_wrapper gyr_bias_edge_wrap(kfr->imu_preintegrator_from_inertial_ref_keyfrm_->preintegrated_,
-                                                                    gyr_bias_vtx1,gyr_bias_vtx2,
-                                                                    sqrt_chi_sq, use_huber_kernel_inertial);
+                                                                    gyr_bias_vtx1, gyr_bias_vtx2);
                 optimizer.addEdge(gyr_bias_edge_wrap.edge_);
             }
-
-        }
-    }
-
-    //check if determinant system
-    if(enable_inertial_optimization_ && imu::config::is_tightly_coupled())
-    {
-        // vio mode
-        // fix world coordinate xyz & yaw
-        if(local_keyfrms.count(0))
-        {
-            auto first_keyfrm_vertex = keyfrm_vtx_container.get_vertex(local_keyfrms[0]);
-            auto edge = new openvslam::optimize::internal::se3::pose_fix_xyzyaw_edge;
-            edge->setVertex(0,first_keyfrm_vertex);
-            edge->setInformation(Mat44_t::Identity());
-            optimizer.addEdge(edge);
-        }
-    }
-    else
-    {
-        //vo mode
-        if(fixed_keyfrms.size()<2)
-        {
-            //fix the first two keyframe
-//            std::vector<data::keyframe*> keyframes;
-//            for(auto id_keyfrm:local_keyfrms)
-//                keyframes.push_back(id_keyfrm.second);
-//            std::sort(keyframes.begin(),keyframes.end(),[](const data::keyframe* f1,const data::keyframe* f2){
-//                return f1->id_<f2->id_;
-//            });
-//
-//            for(int i=0;i<2-fixed_keyfrms.size();i++)
-//            {
-//                spdlog::debug("fix keyframe {}",keyframes[i]->id_);
-//                keyfrm_vtx_container.get_vertex(keyframes[i])->setFixed(true);
-//            }
-            keyfrm_vtx_container.get_vertex(local_keyfrms[0])->setFixed(true);
         }
     }
 
@@ -314,7 +288,7 @@ void local_bundle_adjuster::optimize(openvslam::data::keyframe* curr_keyfrm, boo
     }
 
     optimizer.initializeOptimization();
-//    optimizer.setVerbose(true);
+    optimizer.setVerbose(true);
     optimizer.optimize(num_first_iter_);
 
     // 6. Discard outliers, then perform the second optimization
@@ -348,7 +322,6 @@ void local_bundle_adjuster::optimize(openvslam::data::keyframe* curr_keyfrm, boo
             }
 
             edge->setRobustKernel(nullptr);
-
         }
 
         optimizer.initializeOptimization();
@@ -361,8 +334,7 @@ void local_bundle_adjuster::optimize(openvslam::data::keyframe* curr_keyfrm, boo
     outlier_observations.reserve(reproj_edge_wraps.size());
 
     for (auto& reproj_edge_wrap : reproj_edge_wraps) {
-        if(reproj_edge_wrap.is_outlier())
-        {
+        if (reproj_edge_wrap.is_outlier()) {
             outlier_observations.emplace_back(std::make_pair(reproj_edge_wrap.shot_, reproj_edge_wrap.lm_));
             continue;
         }
@@ -391,6 +363,9 @@ void local_bundle_adjuster::optimize(openvslam::data::keyframe* curr_keyfrm, boo
     {
         std::lock_guard<std::mutex> lock(data::map_database::mtx_database_);
 
+        Rwg = Rwg_vtx->estimate();
+        scale = scale_vtx->estimate();
+
         for (auto& outlier_obs : outlier_observations) {
             auto keyfrm = outlier_obs.first;
             auto lm = outlier_obs.second;
@@ -402,13 +377,12 @@ void local_bundle_adjuster::optimize(openvslam::data::keyframe* curr_keyfrm, boo
             auto local_keyfrm = id_local_keyfrm_pair.second;
             auto keyfrm_vtx = keyfrm_vtx_container.get_vertex(local_keyfrm);
             local_keyfrm->set_cam_pose(keyfrm_vtx->estimate());
-            if(enable_inertial_optimization_ && imu::config::is_tightly_coupled())
-            {
+            if (enable_inertial_optimization_ && imu::config::is_tightly_coupled()) {
                 auto velocity_vtx = velocity_vtx_container.get_vertex(local_keyfrm);
                 local_keyfrm->set_velocity(velocity_vtx->estimate());
                 auto acc_bias_vtx = acc_bias_vtx_container.get_vertex(local_keyfrm);
                 auto gyr_bias_vtx = gyr_bias_vtx_container.get_vertex(local_keyfrm);
-                local_keyfrm->set_bias({acc_bias_vtx->estimate(),gyr_bias_vtx->estimate()});
+                local_keyfrm->set_bias({acc_bias_vtx->estimate(), gyr_bias_vtx->estimate()});
             }
         }
 
@@ -422,11 +396,12 @@ void local_bundle_adjuster::optimize(openvslam::data::keyframe* curr_keyfrm, boo
     }
 
     //if imu states not jointly optimized, do inertial only optimization
-    if(enable_inertial_optimization_ && !imu::config::is_tightly_coupled())
-        optimize_imu(curr_covisibilities,force_stop_flag);
+    if (enable_inertial_optimization_ && !imu::config::is_tightly_coupled())
+        optimize_imu(curr_covisibilities, force_stop_flag,Rwg,scale);
 }
 
-void local_bundle_adjuster::optimize_imu(std::vector<data::keyframe*> local_keyfrms, bool* const force_stop_flag) const {
+
+void local_bundle_adjuster::optimize_imu(std::vector<data::keyframe*> local_keyfrms, bool* const force_stop_flag,Sophus::SO3d& Rwg, double& scale) const {
 
     // 1. Construct an optimizer
     std::unique_ptr<g2o::Solver> block_solver;
@@ -467,9 +442,19 @@ void local_bundle_adjuster::optimize_imu(std::vector<data::keyframe*> local_keyf
         optimizer.addVertex(gyr_bias_vtx);
     }
 
+    auto Rwg_vtx = new imu::internal::gravity_dir_vertex();
+    Rwg_vtx->setId(*(vtx_id_offset) + 1);
+    Rwg_vtx->setEstimate(Rwg);
+    optimizer.addVertex(Rwg_vtx);
+
+
+    auto scale_vtx = new imu::internal::scale_vertex();
+    scale_vtx->setId(*(vtx_id_offset) + 2);
+    scale_vtx->setEstimate(scale);
+    optimizer.addVertex(scale_vtx);
+
 
     //add inertial vertices
-
     for(auto kfr: local_keyfrms)
     {
         auto ref_kfr = kfr->inertial_ref_keyfrm_;
@@ -494,22 +479,22 @@ void local_bundle_adjuster::optimize_imu(std::vector<data::keyframe*> local_keyf
         // 9 degree-of-freedom (n=9)
         constexpr float chi_sq = 16.92;
         const float sqrt_chi_sq = std::sqrt(chi_sq);
-        imu::internal::inertial_edge_wrapper inertial_edge_wrap(kfr->imu_preintegrator_from_inertial_ref_keyfrm_->preintegrated_,
-                                                                acc_bias_vtx1, gyr_bias_vtx1,
-                                                                keyfrm_vtx1, velocity_vtx1, keyfrm_vtx2, velocity_vtx2,
-                                                                sqrt_chi_sq, use_huber_kernel_inertial);
+        imu::internal::inertial_gravity_scale_edge_on_camera_wrapper wrap(kfr->imu_preintegrator_from_inertial_ref_keyfrm_->preintegrated_,
+                                                                          acc_bias_vtx1, gyr_bias_vtx1,
+                                                                          keyfrm_vtx1, velocity_vtx1, keyfrm_vtx2, velocity_vtx2,
+                                                                          Rwg_vtx, scale_vtx);
 
-        optimizer.addEdge(inertial_edge_wrap.edge_);
-
+//                g2o::RobustKernelHuber* rk = new g2o::RobustKernelHuber;
+//                wrap.edge_->setRobustKernel(rk);
+//                rk->setDelta(1.f);
+        optimizer.addEdge(wrap.edge_);
 
         imu::internal::bias_edge_wrapper acc_bias_edge_wrap(kfr->imu_preintegrator_from_inertial_ref_keyfrm_->preintegrated_,
-                                                            acc_bias_vtx1,acc_bias_vtx2,
-                                                            sqrt_chi_sq, use_huber_kernel_inertial);
+                                                            acc_bias_vtx1, acc_bias_vtx2);
         optimizer.addEdge(acc_bias_edge_wrap.edge_);
 
         imu::internal::bias_edge_wrapper gyr_bias_edge_wrap(kfr->imu_preintegrator_from_inertial_ref_keyfrm_->preintegrated_,
-                                                            gyr_bias_vtx1,gyr_bias_vtx2,
-                                                            sqrt_chi_sq, use_huber_kernel_inertial);
+                                                            gyr_bias_vtx1, gyr_bias_vtx2);
         optimizer.addEdge(gyr_bias_edge_wrap.edge_);
 
 
@@ -525,7 +510,8 @@ void local_bundle_adjuster::optimize_imu(std::vector<data::keyframe*> local_keyf
     optimizer.initializeOptimization();
     optimizer.optimize(num_second_iter_);
 
-
+    Rwg = Rwg_vtx->estimate();
+    scale = scale_vtx->estimate();
 
     {
         std::lock_guard<std::mutex> lock(data::map_database::mtx_database_);
@@ -540,6 +526,7 @@ void local_bundle_adjuster::optimize_imu(std::vector<data::keyframe*> local_keyf
         }
     }
 }
+
 
 } // namespace optimize
 } // namespace openvslam

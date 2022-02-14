@@ -131,12 +131,9 @@ public:
 
     //! IMU preintegrator from inertial reference keyframe
     imu::preintegrator* imu_preintegrator_from_inertial_ref_keyfrm_ = nullptr;
-    imu::preintegrator* imu_preintegrator_from_last_frm = nullptr;
-
-    bool imu_is_initialized_{false};
 
     //! current pose predicted from IMU
-    Mat44_t T_cw_pred_;
+    Sophus::SE3d T_cw_pred_;
     //! current velocity predicted from imu
     Vec3_t velocity_;
     //! prediction is valid or not

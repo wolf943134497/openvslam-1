@@ -234,11 +234,11 @@ bool initializer::create_map_for_monocular(data::frame& curr_frm) {
         // add the landmark to the map DB
         map_db_->add_landmark(lm);
     }
-
+    spdlog::debug("000000000000000000");
     // global bundle adjustment
     const auto global_bundle_adjuster = optimize::global_bundle_adjuster(map_db_, num_ba_iters_, true);
     global_bundle_adjuster.optimize();
-
+    spdlog::debug("333333333333333");
     // scale the map so that the median of depths is 1.0
     const auto median_depth = init_keyfrm->compute_median_depth(init_keyfrm->camera_->model_type_ == camera::model_type_t::Equirectangular);
     const auto inv_median_depth = 1.0 / median_depth;
@@ -247,8 +247,11 @@ bool initializer::create_map_for_monocular(data::frame& curr_frm) {
         state_ = initializer_state_t::Wrong;
         return false;
     }
+
+    spdlog::debug("11111111111111");
     scale_map(init_keyfrm, curr_keyfrm, inv_median_depth * scaling_factor_);
 
+    spdlog::debug("22222222222222222");
     // update the current frame pose
     curr_frm.set_cam_pose(curr_keyfrm->get_cam_pose());
 

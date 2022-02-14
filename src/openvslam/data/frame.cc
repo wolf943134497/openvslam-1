@@ -113,6 +113,10 @@ frame::frame(const cv::Mat& img_gray, const cv::Mat& img_depth, const double tim
 
     // Calculate disparity from depth
     compute_stereo_from_depth(img_depth);
+    for(int i=0;i<depths_.size();i++)
+        if(depths_[i]>0)
+            std::cout<<depths_[i]<<" ";
+    std::cout<<std::endl;
 
     // Convert to bearing vector
     camera->convert_keypoints_to_bearings(undist_keypts_, bearings_);

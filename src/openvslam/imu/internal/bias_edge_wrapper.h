@@ -42,8 +42,7 @@ public:
     bias_edge_wrapper() = delete;
 
     bias_edge_wrapper(const std::shared_ptr<preintegrated> preintegrated,
-                      bias_vertex* bias_vtx1, bias_vertex* bias_vtx2,
-                          const float sqrt_chi_sq, const bool use_huber_loss = true);
+                      bias_vertex* bias_vtx1, bias_vertex* bias_vtx2);
 
     virtual ~bias_edge_wrapper() = default;
 
@@ -59,8 +58,7 @@ public:
 };
 
 inline bias_edge_wrapper::bias_edge_wrapper(const std::shared_ptr<preintegrated> preintegrated,
-                                            bias_vertex* bias_vtx1, bias_vertex* bias_vtx2,
-                                            const float sqrt_chi_sq, const bool use_huber_loss) {
+                                            bias_vertex* bias_vtx1, bias_vertex* bias_vtx2) {
 
     auto edge = new bias_edge();
     assert(bias_vtx1->type==bias_vtx2->type);
@@ -74,13 +72,6 @@ inline bias_edge_wrapper::bias_edge_wrapper(const std::shared_ptr<preintegrated>
     edge->setVertex(1, bias_vtx2);
 
     edge_ = edge;
-
-    // loss functionを設定
-    if (use_huber_loss) {
-        auto huber_kernel = new g2o::RobustKernelHuber();
-        huber_kernel->setDelta(sqrt_chi_sq);
-        edge_->setRobustKernel(huber_kernel);
-    }
 }
 
 inline bool bias_edge_wrapper::is_inlier() const {

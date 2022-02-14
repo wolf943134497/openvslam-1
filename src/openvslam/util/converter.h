@@ -58,9 +58,10 @@ public:
     //! Right jacobian. The reference is "On-Manifold Preintegration for Real-Time Visual-Inertial Odometry", (8)
     static Mat33_t right_jacobian_so3(const Vec3_t& v);
 
+    //! adjoint of sim3
     static Mat66_t adjoint(const Mat44_t& T);
 
-    static Mat66_t adjoint(const Mat33_t& R, const Vec3_t& t);
+
 };
 
 } // namespace util

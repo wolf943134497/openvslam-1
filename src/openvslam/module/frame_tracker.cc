@@ -77,6 +77,7 @@ bool frame_tracker::predition_based_track(data::frame& curr_frm,const data::fram
         return false;
     }
 
+
     // Pose optimization
     pose_optimizer_.optimize(curr_frm);
 
@@ -94,6 +95,9 @@ bool frame_tracker::predition_based_track(data::frame& curr_frm,const data::fram
     else {
         return true;
     }
+
+    return true;
+
 }
 
 bool frame_tracker::bow_match_based_track(data::frame& curr_frm, const data::frame& last_frm, data::keyframe* ref_keyfrm) const {

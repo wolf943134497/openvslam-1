@@ -11,6 +11,8 @@
 #include <Eigen/Core>
 #include <Eigen/Geometry>
 #include <opencv2/core/types.hpp>
+#include "sophus/se3.hpp"
+#include "sophus/so3.hpp"
 
 #ifndef M_PI
 // M_PI is not part of the C++ standard. Rather it is part of the POSIX standard. As such,
@@ -38,6 +40,10 @@ using Mat44_t = Eigen::Matrix4d;
 using Mat55_t = MatRC_t<5, 5>;
 
 using Mat66_t = MatRC_t<6, 6>;
+
+using Mat67_t = MatRC_t<6, 7>;
+
+using Mat63_t = MatRC_t<6, 3>;
 
 using Mat77_t = MatRC_t<7, 7>;
 

@@ -55,15 +55,12 @@ void map_publisher::clear_cam_pose_predicts() {
     cam_pose_wc_predicts_.clear();
 }
 
-void map_publisher::add_cam_pose_predicts(const Mat44_t& cam_pose_cw_pred) {
-    Mat44_t T_wc = Mat44_t::Identity();
-    T_wc.topLeftCorner<3,3>() = cam_pose_cw_pred.topLeftCorner<3,3>().transpose();
-    T_wc.topRightCorner<3,1>() = -T_wc.topLeftCorner<3,3>()*cam_pose_cw_pred.topRightCorner<3,1>();
+void map_publisher::add_cam_pose_predicts(const Sophus::SE3d & cam_pose_cw_pred) {
     std::lock_guard<std::mutex> lock(mtx_cam_pose_pred);
-    cam_pose_wc_predicts_.push_back(T_wc);
+    cam_pose_wc_predicts_.push_back(cam_pose_cw_pred.inverse());
 }
 
-std::vector<Mat44_t> map_publisher::get_cam_pose_predicts() {
+std::vector<Sophus::SE3d> map_publisher::get_cam_pose_predicts() {
     std::lock_guard<std::mutex> lock(mtx_cam_pose_pred);
     return cam_pose_wc_predicts_;
 }

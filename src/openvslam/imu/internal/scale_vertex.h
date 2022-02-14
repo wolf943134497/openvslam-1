@@ -45,7 +45,7 @@ inline void scale_vertex::setToOriginImpl() {
 }
 
 inline void scale_vertex::oplusImpl(const number_t* update_) {
-    setEstimate(estimate() * std::exp(*update_));
+    setEstimate(estimate() + *update_);
 }
 
 } // namespace internal

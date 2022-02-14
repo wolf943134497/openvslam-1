@@ -98,7 +98,7 @@ inline velocity_vertex* velocity_vertex_container::create_vertex(const unsigned 
     vtx->setId(vtx_id);
     vtx->setEstimate(velocity);
     vtx->setFixed(is_constant);
-    // databaseに登録
+
     id_container_[vtx_id] = id;
     vtx_id_container_[id] = vtx_id;
     vtx_container_[id] = vtx;

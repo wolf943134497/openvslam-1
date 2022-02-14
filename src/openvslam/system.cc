@@ -263,7 +263,6 @@ std::shared_ptr<Mat44_t> system::feed_monocular_frame(const cv::Mat& img, const 
     }
     if(tracker_->imu_prediction_is_valid_)
     {
-        std::cout<<"is keyframe"<<tracker_->curr_frm_.is_keyframe_<<std::endl;
         map_publisher_->add_cam_pose_predicts(tracker_->T_cw_pred_);
         if(tracker_->curr_frm_.is_keyframe_)
             map_publisher_->clear_cam_pose_predicts();
@@ -381,6 +380,7 @@ bool system::terminate_is_requested() const {
 void system::check_reset_request() {
     std::lock_guard<std::mutex> lock(mtx_reset_);
     if (reset_is_requested_) {
+        map_publisher_->clear_cam_pose_predicts();
         tracker_->reset();
         reset_is_requested_ = false;
     }

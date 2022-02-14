@@ -2,7 +2,7 @@
 #include "openvslam/data/landmark.h"
 #include "openvslam/data/keyframe.h"
 #include "openvslam/imu/preintegrator.h"
-#include "openvslam/imu/internal/inertial_edge_wrapper.h"
+#include "openvslam/imu/internal/inertial_prediction_edge.h"
 #include "openvslam/imu/bias.h"
 #include "openvslam/optimize/pose_optimizer.h"
 #include "openvslam/optimize/internal/se3/pose_opt_edge_wrapper.h"
@@ -29,7 +29,11 @@ pose_optimizer::pose_optimizer(const unsigned int num_trials, const unsigned int
 
 unsigned int pose_optimizer::optimize(data::frame& frm,
                                       data::keyframe* ref_kfm,
-                                      imu::preintegrator* preint) const {
+                                      imu::preintegrator* preint,
+                                      const Vec3_t& frm_velocity,
+                                      const Sophus::SO3d& Rwg,
+                                      const double scale,
+                                      bool verbose) const {
     // 1. Construct an optimizer
 
     std::unique_ptr<g2o::Solver> block_solver;
@@ -58,50 +62,34 @@ unsigned int pose_optimizer::optimize(data::frame& frm,
 
     if(ref_kfm && preint)
     {
-        auto kfr_vtx = new internal::se3::shot_vertex();
-        kfr_vtx->setId(frm.id_+1);
-        kfr_vtx->setEstimate(util::converter::to_g2o_SE3(ref_kfm->get_cam_pose()));
-        kfr_vtx->setFixed(true);
-        optimizer.addVertex(kfr_vtx);
 
-        auto velocity_vtx = new imu::internal::velocity_vertex();
-        velocity_vtx->setId(frm.id_+2);
-        velocity_vtx->setEstimate(ref_kfm->get_velocity());
-        velocity_vtx->setFixed(true);
-        optimizer.addVertex(velocity_vtx);
+        auto prediction_edge = new
+            imu::internal::inertial_prediction_edge(Sophus::SE3d(ref_kfm->get_cam_pose()),
+                                                    ref_kfm->get_velocity(),
+                                                    Rwg,
+                                                    scale,
+                                                    ref_kfm->get_bias());
+        Eigen::Matrix<double,9,9> Info = preint->preintegrated_->covariance_.block<9,9>(0,0).cast<double>().inverse();
+        Info = (Info+Info.transpose())/2;
+        Eigen::SelfAdjointEigenSolver<Eigen::Matrix<double,9,9> > es(Info);
+        Eigen::Matrix<double,9,1> eigs = es.eigenvalues();
+        for(int i=0;i<9;i++)
+            if(eigs[i]<1e-12)
+                eigs[i]=0;
+        Info = es.eigenvectors()*eigs.asDiagonal()*es.eigenvectors().transpose();
+//        prediction_edge->setInformation(Info);
 
-        auto bias = ref_kfm->get_bias();
-        auto acc_vtx = new imu::internal::bias_vertex();
-        acc_vtx->type = imu::internal::bias_vertex::Type::ACC;
-        acc_vtx->setId(frm.id_+3);
-        acc_vtx->setEstimate(bias.acc_);
-        acc_vtx->setFixed(true);
-        optimizer.addVertex(acc_vtx);
+//        MatRC_t<15, 15> info = preint->preintegrated_->get_information();
+        Mat66_t info_Rt;
+        info_Rt<<Info.block<3,3>(0,0),Info.block<3,3>(0,6),
+            Info.block<3,3>(6,0),Info.block<3,3>(6,6);
+        prediction_edge->setInformation(info_Rt);
 
-        auto gyr_vtx = new imu::internal::bias_vertex();
-        gyr_vtx->type = imu::internal::bias_vertex::Type::Gyr;
-        gyr_vtx->setId(frm.id_+4);
-        gyr_vtx->setEstimate(bias.gyr_);
-        gyr_vtx->setFixed(true);
-        optimizer.addVertex(gyr_vtx);
+        prediction_edge->setMeasurement(preint->preintegrated_);
 
-        auto frm_velocity_vtx = new imu::internal::velocity_vertex();
-        frm_velocity_vtx->setId(frm.id_+5);
-        frm_velocity_vtx->setEstimate(Vec3_t::Zero());
-        frm_velocity_vtx->setFixed(false);
-        optimizer.addVertex(frm_velocity_vtx);
+        prediction_edge->setVertex(0, frm_vtx);
 
-        auto inertial_edge = new imu::internal::inertial_edge_on_camera();
-        inertial_edge->setInformation(preint->preintegrated_->get_information().block<9, 9>(0, 0));
-        inertial_edge->setMeasurement(preint->preintegrated_);
-        inertial_edge->setVertex(0, kfr_vtx);
-        inertial_edge->setVertex(1, velocity_vtx);
-        inertial_edge->setVertex(2, acc_vtx);
-        inertial_edge->setVertex(3, gyr_vtx);
-        inertial_edge->setVertex(4, frm_vtx);
-        inertial_edge->setVertex(5, frm_velocity_vtx);
-
-        optimizer.addEdge(inertial_edge);
+        optimizer.addEdge(prediction_edge);
     }
 
     const unsigned int num_keypts = frm.num_keypts_;
@@ -156,6 +144,7 @@ unsigned int pose_optimizer::optimize(data::frame& frm,
     unsigned int num_bad_obs = 0;
     for (unsigned int trial = 0; trial < num_trials_; ++trial) {
         optimizer.initializeOptimization();
+        optimizer.setVerbose(verbose);
         optimizer.optimize(num_each_iter_);
 
         num_bad_obs = 0;

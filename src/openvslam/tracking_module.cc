@@ -56,6 +56,7 @@ double get_depthmap_factor(const camera::base* camera, const YAML::Node& yaml_no
     if (depthmap_factor < 0.) {
         throw std::runtime_error("depthmap_factor must be greater than 0");
     }
+    spdlog::debug("depthmap factor {}",depthmap_factor);
     return depthmap_factor;
 }
 
@@ -278,6 +279,8 @@ void tracking_module::reset() {
     mapper_->request_reset();
     global_optimizer_->request_reset();
 
+
+
     bow_db_->clear();
     map_db_->clear();
 
@@ -290,9 +293,10 @@ void tracking_module::reset() {
         delete imu_preintegrator_from_inertial_ref_keyfrm_;
 
     imu_preintegrator_from_inertial_ref_keyfrm_ = nullptr;
-    imu_is_initialized_ = false;
 
     tracking_state_ = tracker_state_t::NotInitialized;
+
+    imu_prediction_is_valid_ = false;
 }
 
 bool tracking_module::preintegrate_imu() {
@@ -308,7 +312,7 @@ bool tracking_module::preintegrate_imu() {
                      std::to_string(curr_frm_.timestamp_),
                      std::to_string(imu_data_deque_.back()->ts_));
         lg.unlock();
-        usleep(1e6);
+        usleep(1e4);
         lg.lock();
     }
 
@@ -319,8 +323,8 @@ bool tracking_module::preintegrate_imu() {
         imu_data_deque_.pop_front();
     }
 
-    assert(imus.back()->ts_<curr_frm_.timestamp_ &&
-           imu_data_deque_.front()->ts_>curr_frm_.timestamp_);
+    assert(imus.back()->ts_<=curr_frm_.timestamp_ &&
+           imu_data_deque_.front()->ts_>=curr_frm_.timestamp_);
     double ratio = (curr_frm_.timestamp_-imus.back()->ts_)/(imu_data_deque_.front()->ts_-imus.back()->ts_);
     auto interpolated_imu = std::make_shared<imu::data>((1-ratio)*imus.back()->acc_+ratio*imu_data_deque_.front()->acc_,
                                                         (1-ratio)*imus.back()->gyr_+ratio*imu_data_deque_.front()->gyr_,
@@ -364,10 +368,8 @@ void tracking_module::track() {
         std::this_thread::sleep_for(std::chrono::microseconds(5000));
     }
 
-    // LOCK the map database
-    std::lock_guard<std::mutex> lock(data::map_database::mtx_database_);
-
     if (tracking_state_ == tracker_state_t::Initializing) {
+        //not initialized, no need to lock the map
         if (initialize()) {
             // update the reference keyframe, local keyframes, and local landmarks
             update_local_map();
@@ -398,13 +400,16 @@ void tracking_module::track() {
         }
     }
     else {
+        // LOCK the map database
+        std::lock_guard<std::mutex> lock(data::map_database::mtx_database_);
+
         // apply replace of landmarks observed in the last frame
         apply_landmark_replace();
         // update the camera pose of the last frame
         // because the mapping module might optimize the camera pose of the last frame's reference keyframe
         update_last_frame();
 
-        if(imu_is_initialized_)
+        if(map_db_->imu_initialized_)
             predict_from_imu();
 
         // set the reference keyframe of the current frame
@@ -468,18 +473,54 @@ void tracking_module::track() {
 
 void tracking_module::predict_from_imu() {
     imu_prediction_is_valid_ = false;
-    auto Twi = inertial_ref_keyfrm_->get_imu_pose_inv();
+
     if(!inertial_ref_keyfrm_->velocity_valid_)
         return;
+
     auto v = inertial_ref_keyfrm_->get_velocity();
     auto bias = inertial_ref_keyfrm_->get_bias();
-    auto Twi2 = imu_preintegrator_from_inertial_ref_keyfrm_->predict_pose(Twi,v,bias);
-    T_cw_pred_ = imu::config::get_rel_pose_ci()*util::converter::inv(Twi2);
+
+    Sophus::SO3d Rwg;
+    double scale;
+    map_db_->get_gravity_direction_scale(Rwg,scale);
+
+    Sophus::SE3d Twg(Rwg,{0,0,0});
+    Sophus::SE3d Tci(imu::config::get_rel_pose_ci());
+
+    //----------------nav state 1
+    Sophus::SE3d Twc1(inertial_ref_keyfrm_->get_cam_pose_inv());
+    Sophus::SE3d Twc1_aligned = Twg.inverse()*Twc1;
+    Sophus::SE3d Twc1_aligned_scaled(Twc1_aligned.so3(),
+                                     Twc1_aligned.translation()*scale);
+    Sophus::SE3d Tgi1 = Twc1_aligned_scaled*Tci;
+    Sophus::SO3d Rgi1 = Tgi1.so3();
+    Vec3_t tgi1 = Tgi1.translation();
+
+    auto preintegrated = imu_preintegrator_from_inertial_ref_keyfrm_->preintegrated_;
+
+    Vec3_t g(0,0,-9.81);
+    const Sophus::SO3d delta_rotation(preintegrated->get_delta_rotation_on_bias(bias));
+    const Vec3_t delta_position = preintegrated->get_delta_position_on_bias(bias);
+    const Vec3_t delta_velocity = preintegrated->get_delta_velocity_on_bias(bias);
+    const double dt = preintegrated->dt_;
+
+    Vec3_t tgi2 = tgi1 + v* dt + 0.5 * g * dt * dt + Rgi1*delta_position;
+    Sophus::SO3d Rgi2 = Rgi1*delta_rotation;
+
+    Sophus::SE3d Tgi2(Rgi2,tgi2);
+    Sophus::SE3d Twc2_aligned_scaled = Tgi2*Tci.inverse();
+    Sophus::SE3d Twc2_aligned(Twc2_aligned_scaled.so3(),
+                              Twc2_aligned_scaled.translation()/scale);
+    Sophus::SE3d Twc2 = Twg*Twc2_aligned;
+    T_cw_pred_ = Twc2.inverse();
+
+    velocity_ = v + g*dt + Rgi1*delta_velocity;                          // (8)
+
+
 //    std::cout<<"--------------------"<<std::endl;
 //    std::cout<<"frm "<<curr_frm_.id_<<std::endl;
 //    std::cout<<"pred "<<T_cw_pred_<<std::endl;
-    velocity_ = imu_preintegrator_from_inertial_ref_keyfrm_->
-        predict_velo(Twi,v,bias);
+
 
     imu_prediction_is_valid_ = true;
 }
@@ -520,9 +561,9 @@ bool tracking_module::track_current_frame() {
 
     if (tracking_state_ == tracker_state_t::Tracking) {
         // Tracking mode
-        if(imu_prediction_is_valid_){
-            succeeded = frame_tracker_.predition_based_track(curr_frm_,last_frm_,T_cw_pred_);
-        }
+//        if(imu_prediction_is_valid_){
+//            succeeded = frame_tracker_.predition_based_track(curr_frm_,last_frm_,T_cw_pred_.matrix());
+//        }
         if (!succeeded && twist_is_valid_ && last_reloc_frm_id_ + 2 < curr_frm_.id_) {
             // if the motion model is valid
             succeeded = frame_tracker_.motion_based_track(curr_frm_, last_frm_, twist_);
@@ -624,9 +665,20 @@ bool tracking_module::optimize_current_frame_with_local_map() {
     search_local_landmarks();
 
     // optimize the pose
-//    if(imu_prediction_is_valid_ && imu::config::is_tightly_coupled())
-//        pose_optimizer_.optimize(curr_frm_,inertial_ref_keyfrm_,imu_preintegrator_from_inertial_ref_keyfrm_);
-//    else
+    if(imu_prediction_is_valid_ && imu::config::is_tightly_coupled())
+    {
+        Sophus::SO3d Rwg;
+        double scale;
+        map_db_->get_gravity_direction_scale(Rwg,scale);
+        spdlog::debug("inertial pose optimization");
+        pose_optimizer_.optimize(curr_frm_,
+                                 inertial_ref_keyfrm_,
+                                 imu_preintegrator_from_inertial_ref_keyfrm_,
+                                 velocity_,
+                                 Rwg,
+                                 scale, false);
+    }
+    else
         pose_optimizer_.optimize(curr_frm_);
 
     // count up the number of tracked landmarks
@@ -774,8 +826,9 @@ bool tracking_module::new_keyframe_is_needed() const {
         return false;
     }
 
-//    if(imu::config::available() && curr_frm_.timestamp_-inertial_ref_keyfrm_->timestamp_>0.5)
-//        return true;
+
+    if(imu::config::available() && curr_frm_.timestamp_-inertial_ref_keyfrm_->timestamp_>=0.5)
+        return true;
 
     // cannnot insert the new keyframe in a second after relocalization
     const auto num_keyfrms = map_db_->get_num_keyframes();
@@ -794,7 +847,6 @@ void tracking_module::insert_new_keyframe() {
         return;
     }
 
-
     // set the reference keyframe with the new keyframe
     curr_frm_.ref_keyfrm_ = new_keyfrm;
     curr_frm_.is_keyframe_ = true;
@@ -804,6 +856,9 @@ void tracking_module::insert_new_keyframe() {
 
         inertial_ref_keyfrm_ = new_keyfrm;
         imu_preintegrator_from_inertial_ref_keyfrm_ = new imu::preintegrator(new_keyfrm->get_bias());
+
+        if(imu_prediction_is_valid_)
+            new_keyfrm->set_velocity(velocity_);
     }
 }
 

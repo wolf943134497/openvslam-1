@@ -1,6 +1,7 @@
 #include "openvslam/data/keyframe.h"
 #include "openvslam/data/landmark.h"
 #include "openvslam/module/local_map_cleaner.h"
+#include "openvslam/imu/config.h"
 
 #include "spdlog/spdlog.h"
 
@@ -91,6 +92,10 @@ unsigned int local_map_cleaner::remove_redundant_keyframes(data::keyframe* cur_k
             && cur_keyfrm->id_ <= covisibility->id_ + window_size_not_to_remove) {
             continue;
         }
+
+        if(imu::config::available() && covisibility->inertial_referrer_keyfrm_->timestamp_-
+                                                covisibility->inertial_ref_keyfrm_->timestamp_>0.5)
+            continue;
 
         // count the number of redundant observations (num_redundant_obs) and valid observations (num_valid_obs)
         // for the covisibility
